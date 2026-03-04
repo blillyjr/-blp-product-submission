@@ -270,7 +270,7 @@ async function loadProjects(){
   projects=data.value.map(i=>({id:i.id,...i.fields}));
 }
 async function loadProducts(projectId){
-  const data=await graphGet(`/sites/${siteId}/lists/${productsListId}/items?expand=fields&$filter=fields/Project_x0020_NameLookupId eq '${projectId}'&$top=500`);
+  const data=await graphGet(`/sites/${siteId}/lists/${productsListId}/items?expand=fields&$filter=fields/ProjectNameLookupId eq '${projectId}'&$top=500`);
   products=data.value.map(i=>({id:i.id,...i.fields}));
 }
 async function createProject(fields){
@@ -294,65 +294,65 @@ function formToSPFields(){
   const c=compute();
   const f={
     Title:form.itemName||"Untitled",
-    Project_x0020_NameLookupId:currentProject?.id,
+    ProjectNameLookupId:currentProject?.id,
     Supplier:form.supplier,
-    Product_x0020_Category:form.websiteCategory,
-    Vendor_x0020_Item_x0020_Num:form.vendorItemNum,
-    Item_x0020_Color:form.itemColor,
-    Item_x0020_Size_x0020_Apparel:form.itemSizeApparel,
-    Item_x0020_Description:form.itemDescription,
-    Stock_x0020_Status:form.stockStatus,
-    Is_x0020_Childrens:form.isChildrens,
-    Needs_x0020_Prop_x0020_65:form.needsProp65,
-    Overseas_x0020_Direct:form.isOverseasDirect,
-    Supplier_x0020_Minimum:p(form.supplierMinimum)||null,
-    Website_x0020_Minimum:p(form.websiteMinimum)||null,
-    First_x0020_Qty_x0020_to_x0020_Order:p(form.firstQtyToOrder)||null,
-    Item_x0020_Weight:form.itemWeight,
-    Item_x0020_Size_x0020_Dimensional:form.itemSizeDimensional,
-    Sell_x0020_in_x0020_Bundles:form.sellInBundles,
-    Bundle_x0020_Qty:p(form.bundleQty)||null,
-    Decoration_x0020_Supplier:form.decorationSupplier,
-    PMS_x0020_Charge:p(form.pmsCharge)||null,
-    Item_x0020_Cost_x0020_Net:p(form.itemCostNet)||null,
-    Run_x0020_Charge:p(form.runCharge)||null,
-    Run_x0020_Charge_x0020_Addl:p(form.runChargeAddlLocation)||null,
-    Initial_x0020_Setup_x0020_Charge:p(form.initialSetupCharge)||null,
-    Repeat_x0020_Setup:p(form.repeatSetup)||null,
-    Folding_x0020_Polybag:p(form.foldingPolybag)||null,
-    Shirt_x0020_Size_x0020_Sticker:p(form.shirtSizeSticker)||null,
-    Inbound_x0020_Freight_x0020_Method:form.inboundFreightMethod,
-    Inbound_x0020_Freight_x0020_Total:p(form.inboundFreightTotal)||null,
-    Outbound_x0020_Freight_x0020_Method:form.outboundFreightMethod,
-    Outbound_x0020_Freight_x0020_Total:p(form.outboundFreightTotal)||null,
-    Ships_x0020_In:form.shipsIn,
-    Master_x0020_Carton_x0020_Cost:p(form.masterCartonCost)||null,
-    Custom_x0020_Packaging:form.customPackaging,
-    Custom_x0020_Pkg_x0020_Type:form.customPackagingType,
-    Custom_x0020_Pkg_x0020_Setup_x0020_Cost:p(form.customPkgSetupCost)||null,
-    Custom_x0020_Pkg_x0020_Unit_x0020_Cost:p(form.customPkgUnitCost)||null,
-    Sold_x0020_As:form.soldAs,
-    Bundle_x0020_Source:form.bundleSource,
-    Bundle_x0020_Fee_x0020_Per_x0020_Pack:p(form.bundleFeePerPack)||null,
-    Qty_x0020_Per_x0020_Pack:p(form.qtyPerPack)||null,
-    PMS_x0020_Sell:p(form.pmsSell)||null,
-    Final_x0020_Sell_x0020_SB:p(form.finalSellSB)||null,
-    Product_x0020_URL:form.productURL,
-    Co_x002d_op_x0020_Num:form.coopNum,
-    Standard_x0020_Lead_x0020_Time:form.standardLeadTime,
-    Is_x0020_24hr_x0020_Available:form.is24HrAvailable,
-    Low_x0020_Par_x0020_Level:p(form.lowParLevel)||null,
+    ProductCategory:form.websiteCategory,
+    VendorItemNum:form.vendorItemNum,
+    ItemColor:form.itemColor,
+    ItemSizeApparel:form.itemSizeApparel,
+    ItemDescription:form.itemDescription,
+    StockStatus:form.stockStatus,
+    IsChildrens:form.isChildrens,
+    NeedsProp_x0020_65:form.needsProp65,
+    OverseasDirect:form.isOverseasDirect,
+    SupplierMinimum:p(form.supplierMinimum)||null,
+    WebsiteMinimum:p(form.websiteMinimum)||null,
+    FirstQtytoOrder:p(form.firstQtyToOrder)||null,
+    ItemWeight:form.itemWeight,
+    ItemSizeDimensional:form.itemSizeDimensional,
+    SellinBundles:form.sellInBundles,
+    BundleQty:p(form.bundleQty)||null,
+    DecorationSupplier:form.decorationSupplier,
+    PMSCharge:p(form.pmsCharge)||null,
+    ItemCostNet:p(form.itemCostNet)||null,
+    RunCharge:p(form.runCharge)||null,
+    RunChargeAddl:p(form.runChargeAddlLocation)||null,
+    InitialSetupCharge:p(form.initialSetupCharge)||null,
+    RepeatSetup:p(form.repeatSetup)||null,
+    FoldingPolybag:p(form.foldingPolybag)||null,
+    ShirtSizeSticker:p(form.shirtSizeSticker)||null,
+    InboundFreightMethod:form.inboundFreightMethod,
+    InboundFreightTotal:p(form.inboundFreightTotal)||null,
+    OutboundFreightMethod:form.outboundFreightMethod,
+    OutboundFreightTotal:p(form.outboundFreightTotal)||null,
+    ShipsIn:form.shipsIn,
+    MasterCartonCost:p(form.masterCartonCost)||null,
+    CustomPackaging:form.customPackaging,
+    CustomPkgType:form.customPackagingType,
+    CustomPkgSetupCost:p(form.customPkgSetupCost)||null,
+    CustomPkgUnitCost:p(form.customPkgUnitCost)||null,
+    SoldAs:form.soldAs,
+    BundleSource:form.bundleSource,
+    BundleFeePerPack:p(form.bundleFeePerPack)||null,
+    QtyPerPack:p(form.qtyPerPack)||null,
+    PMSSell:p(form.pmsSell)||null,
+    FinalSellSB:p(form.finalSellSB)||null,
+    ProductURL:form.productURL,
+    Co_x002d_opNum:form.coopNum,
+    StandardLeadTime:form.standardLeadTime,
+    Is_x0020_24hrAvailable:form.is24HrAvailable,
+    LowParLevel:p(form.lowParLevel)||null,
     Notes:form.notes,
-    BLP_x0020_Website_x0020_Item_x0020_Num:form.blpWebsiteItemNum,
-    Website_x0020_Description:form.websiteDescription,
-    Current_x0020_Website_x0020_Price:p(form.currentWebsitePrice)||null,
-    SB_x0020_Price_x0020_Eaches:p(form.sbPriceEaches)||null,
-    SB_x0020_Price_x0020_Packs:p(form.sbPricePacks)||null,
-    OMG_x0020_Sell:p(form.omgSell)||null,
-    OMG_x0020_Cost:p(form.omgCost)||null,
-    Submission_x0020_Status:form.submissionStatus||"Draft",
-    Submitted_x0020_By:userName,
-    Modified_x0020_By_x0020_Role:role,
+    BLPWebsiteItemNum:form.blpWebsiteItemNum,
+    WebsiteDescription:form.websiteDescription,
+    CurrentWebsitePrice:p(form.currentWebsitePrice)||null,
+    SBPriceEaches:p(form.sbPriceEaches)||null,
+    SBPricePacks:p(form.sbPricePacks)||null,
+    OMGSell:p(form.omgSell)||null,
+    OMGCost:p(form.omgCost)||null,
+    SubmissionStatus:form.submissionStatus||"Draft",
+    SubmittedBy:userName,
+    ModifiedByRole:role,
   };
   // Apparel size data - store as JSON in Notes or a dedicated field
   if(isApparel()){
@@ -368,8 +368,8 @@ function formToSPFields(){
     f[`Deco_x0020_${n}_x0020_Logo`]=d.logo||null;
     f[`Deco_x0020_${n}_x0020_Colors`]=d.colors||null;
     f[`Deco_x0020_${n}_x0020_PMS`]=d.pms||null;
-    f[`Deco_x0020_${n}_x0020_Setup_x0020_Sell`]=p(d.setupSell)||null;
-    f[`Deco_x0020_${n}_x0020_Setup_x0020_Cost`]=p(d.setupCost)||null;
+    f[`Deco_x0020_${n}_x0020_SetupSell`]=p(d.setupSell)||null;
+    f[`Deco_x0020_${n}_x0020_SetupCost`]=p(d.setupCost)||null;
   }
   return f;
 }
@@ -378,61 +378,61 @@ function spFieldsToForm(sp){
   form=getDefaults();
   form.itemName=sp.Title||"";
   form.supplier=sp.Supplier||"";
-  form.websiteCategory=sp.Product_x0020_Category||"";
-  form.vendorItemNum=sp.Vendor_x0020_Item_x0020_Num||"";
-  form.itemColor=sp.Item_x0020_Color||"";
-  form.itemSizeApparel=sp.Item_x0020_Size_x0020_Apparel||"";
-  form.itemDescription=sp.Item_x0020_Description||"";
-  form.stockStatus=sp.Stock_x0020_Status||"In Stock";
-  form.isChildrens=sp.Is_x0020_Childrens||"No";
-  form.needsProp65=sp.Needs_x0020_Prop_x0020_65||"No";
-  form.isOverseasDirect=sp.Overseas_x0020_Direct||"No";
-  form.supplierMinimum=sp.Supplier_x0020_Minimum!=null?String(sp.Supplier_x0020_Minimum):"";
-  form.websiteMinimum=sp.Website_x0020_Minimum!=null?String(sp.Website_x0020_Minimum):"1";
-  form.firstQtyToOrder=sp.First_x0020_Qty_x0020_to_x0020_Order!=null?String(sp.First_x0020_Qty_x0020_to_x0020_Order):"";
-  form.itemWeight=sp.Item_x0020_Weight||"";
-  form.itemSizeDimensional=sp.Item_x0020_Size_x0020_Dimensional||"";
-  form.sellInBundles=sp.Sell_x0020_in_x0020_Bundles||"No";
-  form.bundleQty=sp.Bundle_x0020_Qty!=null?String(sp.Bundle_x0020_Qty):"";
-  form.decorationSupplier=sp.Decoration_x0020_Supplier||"";
-  form.pmsCharge=sp.PMS_x0020_Charge!=null?String(sp.PMS_x0020_Charge):"0";
-  form.itemCostNet=sp.Item_x0020_Cost_x0020_Net!=null?String(sp.Item_x0020_Cost_x0020_Net):"";
-  form.runCharge=sp.Run_x0020_Charge!=null?String(sp.Run_x0020_Charge):"0";
-  form.runChargeAddlLocation=sp.Run_x0020_Charge_x0020_Addl!=null?String(sp.Run_x0020_Charge_x0020_Addl):"0";
-  form.initialSetupCharge=sp.Initial_x0020_Setup_x0020_Charge!=null?String(sp.Initial_x0020_Setup_x0020_Charge):"0";
-  form.repeatSetup=sp.Repeat_x0020_Setup!=null?String(sp.Repeat_x0020_Setup):"0";
-  form.foldingPolybag=sp.Folding_x0020_Polybag!=null?String(sp.Folding_x0020_Polybag):"0";
-  form.shirtSizeSticker=sp.Shirt_x0020_Size_x0020_Sticker!=null?String(sp.Shirt_x0020_Size_x0020_Sticker):"0";
-  form.inboundFreightMethod=sp.Inbound_x0020_Freight_x0020_Method||"Category Default";
-  form.inboundFreightTotal=sp.Inbound_x0020_Freight_x0020_Total!=null?String(sp.Inbound_x0020_Freight_x0020_Total):"";
-  form.outboundFreightMethod=sp.Outbound_x0020_Freight_x0020_Method||"Category Default";
-  form.outboundFreightTotal=sp.Outbound_x0020_Freight_x0020_Total!=null?String(sp.Outbound_x0020_Freight_x0020_Total):"";
-  form.shipsIn=sp.Ships_x0020_In||"Individual Box";
-  form.masterCartonCost=sp.Master_x0020_Carton_x0020_Cost!=null?String(sp.Master_x0020_Carton_x0020_Cost):"1.00";
-  form.customPackaging=sp.Custom_x0020_Packaging||"No";
-  form.customPackagingType=sp.Custom_x0020_Pkg_x0020_Type||"";
-  form.customPkgSetupCost=sp.Custom_x0020_Pkg_x0020_Setup_x0020_Cost!=null?String(sp.Custom_x0020_Pkg_x0020_Setup_x0020_Cost):"";
-  form.customPkgUnitCost=sp.Custom_x0020_Pkg_x0020_Unit_x0020_Cost!=null?String(sp.Custom_x0020_Pkg_x0020_Unit_x0020_Cost):"";
-  form.soldAs=sp.Sold_x0020_As||"Each";
-  form.bundleSource=sp.Bundle_x0020_Source||"N/A";
-  form.bundleFeePerPack=sp.Bundle_x0020_Fee_x0020_Per_x0020_Pack!=null?String(sp.Bundle_x0020_Fee_x0020_Per_x0020_Pack):"0";
-  form.qtyPerPack=sp.Qty_x0020_Per_x0020_Pack!=null?String(sp.Qty_x0020_Per_x0020_Pack):"1";
-  form.pmsSell=sp.PMS_x0020_Sell!=null?String(sp.PMS_x0020_Sell):"";
-  form.finalSellSB=sp.Final_x0020_Sell_x0020_SB!=null?String(sp.Final_x0020_Sell_x0020_SB):"";
-  form.productURL=sp.Product_x0020_URL||"";
-  form.coopNum=sp.Co_x002d_op_x0020_Num||"";
-  form.standardLeadTime=sp.Standard_x0020_Lead_x0020_Time||"";
-  form.is24HrAvailable=sp.Is_x0020_24hr_x0020_Available||"No";
-  form.lowParLevel=sp.Low_x0020_Par_x0020_Level!=null?String(sp.Low_x0020_Par_x0020_Level):"";
+  form.websiteCategory=sp.ProductCategory||"";
+  form.vendorItemNum=sp.VendorItemNum||"";
+  form.itemColor=sp.ItemColor||"";
+  form.itemSizeApparel=sp.ItemSizeApparel||"";
+  form.itemDescription=sp.ItemDescription||"";
+  form.stockStatus=sp.StockStatus||"In Stock";
+  form.isChildrens=sp.IsChildrens||"No";
+  form.needsProp65=sp.NeedsProp_x0020_65||"No";
+  form.isOverseasDirect=sp.OverseasDirect||"No";
+  form.supplierMinimum=sp.SupplierMinimum!=null?String(sp.SupplierMinimum):"";
+  form.websiteMinimum=sp.WebsiteMinimum!=null?String(sp.WebsiteMinimum):"1";
+  form.firstQtyToOrder=sp.FirstQtytoOrder!=null?String(sp.FirstQtytoOrder):"";
+  form.itemWeight=sp.ItemWeight||"";
+  form.itemSizeDimensional=sp.ItemSizeDimensional||"";
+  form.sellInBundles=sp.SellinBundles||"No";
+  form.bundleQty=sp.BundleQty!=null?String(sp.BundleQty):"";
+  form.decorationSupplier=sp.DecorationSupplier||"";
+  form.pmsCharge=sp.PMSCharge!=null?String(sp.PMSCharge):"0";
+  form.itemCostNet=sp.ItemCostNet!=null?String(sp.ItemCostNet):"";
+  form.runCharge=sp.RunCharge!=null?String(sp.RunCharge):"0";
+  form.runChargeAddlLocation=sp.RunChargeAddl!=null?String(sp.RunChargeAddl):"0";
+  form.initialSetupCharge=sp.InitialSetupCharge!=null?String(sp.InitialSetupCharge):"0";
+  form.repeatSetup=sp.RepeatSetup!=null?String(sp.RepeatSetup):"0";
+  form.foldingPolybag=sp.FoldingPolybag!=null?String(sp.FoldingPolybag):"0";
+  form.shirtSizeSticker=sp.ShirtSizeSticker!=null?String(sp.ShirtSizeSticker):"0";
+  form.inboundFreightMethod=sp.InboundFreightMethod||"Category Default";
+  form.inboundFreightTotal=sp.InboundFreightTotal!=null?String(sp.InboundFreightTotal):"";
+  form.outboundFreightMethod=sp.OutboundFreightMethod||"Category Default";
+  form.outboundFreightTotal=sp.OutboundFreightTotal!=null?String(sp.OutboundFreightTotal):"";
+  form.shipsIn=sp.ShipsIn||"Individual Box";
+  form.masterCartonCost=sp.MasterCartonCost!=null?String(sp.MasterCartonCost):"1.00";
+  form.customPackaging=sp.CustomPackaging||"No";
+  form.customPackagingType=sp.CustomPkgType||"";
+  form.customPkgSetupCost=sp.CustomPkgSetupCost!=null?String(sp.CustomPkgSetupCost):"";
+  form.customPkgUnitCost=sp.CustomPkgUnitCost!=null?String(sp.CustomPkgUnitCost):"";
+  form.soldAs=sp.SoldAs||"Each";
+  form.bundleSource=sp.BundleSource||"N/A";
+  form.bundleFeePerPack=sp.BundleFeePerPack!=null?String(sp.BundleFeePerPack):"0";
+  form.qtyPerPack=sp.QtyPerPack!=null?String(sp.QtyPerPack):"1";
+  form.pmsSell=sp.PMSSell!=null?String(sp.PMSSell):"";
+  form.finalSellSB=sp.FinalSellSB!=null?String(sp.FinalSellSB):"";
+  form.productURL=sp.ProductURL||"";
+  form.coopNum=sp.Co_x002d_opNum||"";
+  form.standardLeadTime=sp.StandardLeadTime||"";
+  form.is24HrAvailable=sp.Is_x0020_24hrAvailable||"No";
+  form.lowParLevel=sp.LowParLevel!=null?String(sp.LowParLevel):"";
   form.notes=sp.Notes||"";
-  form.blpWebsiteItemNum=sp.BLP_x0020_Website_x0020_Item_x0020_Num||"";
-  form.websiteDescription=sp.Website_x0020_Description||"";
-  form.currentWebsitePrice=sp.Current_x0020_Website_x0020_Price!=null?String(sp.Current_x0020_Website_x0020_Price):"";
-  form.sbPriceEaches=sp.SB_x0020_Price_x0020_Eaches!=null?String(sp.SB_x0020_Price_x0020_Eaches):"";
-  form.sbPricePacks=sp.SB_x0020_Price_x0020_Packs!=null?String(sp.SB_x0020_Price_x0020_Packs):"";
-  form.omgSell=sp.OMG_x0020_Sell!=null?String(sp.OMG_x0020_Sell):"";
-  form.omgCost=sp.OMG_x0020_Cost!=null?String(sp.OMG_x0020_Cost):"";
-  form.submissionStatus=sp.Submission_x0020_Status||"Draft";
+  form.blpWebsiteItemNum=sp.BLPWebsiteItemNum||"";
+  form.websiteDescription=sp.WebsiteDescription||"";
+  form.currentWebsitePrice=sp.CurrentWebsitePrice!=null?String(sp.CurrentWebsitePrice):"";
+  form.sbPriceEaches=sp.SBPriceEaches!=null?String(sp.SBPriceEaches):"";
+  form.sbPricePacks=sp.SBPricePacks!=null?String(sp.SBPricePacks):"";
+  form.omgSell=sp.OMGSell!=null?String(sp.OMGSell):"";
+  form.omgCost=sp.OMGCost!=null?String(sp.OMGCost):"";
+  form.submissionStatus=sp.SubmissionStatus||"Draft";
   // Load size data if present
   if(sp._sizeData){
     try{
@@ -450,22 +450,22 @@ function spFieldsToForm(sp){
         method:m||"",location:sp[`Deco_x0020_${i}_x0020_Location`]||"",
         dimensions:sp[`Deco_x0020_${i}_x0020_Dimensions`]||"",logo:sp[`Deco_x0020_${i}_x0020_Logo`]||"",
         colors:sp[`Deco_x0020_${i}_x0020_Colors`]||"",pms:sp[`Deco_x0020_${i}_x0020_PMS`]||"",
-        setupSell:sp[`Deco_x0020_${i}_x0020_Setup_x0020_Sell`]!=null?String(sp[`Deco_x0020_${i}_x0020_Setup_x0020_Sell`]):"",
-        setupCost:sp[`Deco_x0020_${i}_x0020_Setup_x0020_Cost`]!=null?String(sp[`Deco_x0020_${i}_x0020_Setup_x0020_Cost`]):"",
+        setupSell:sp[`Deco_x0020_${i}_x0020_SetupSell`]!=null?String(sp[`Deco_x0020_${i}_x0020_SetupSell`]):"",
+        setupCost:sp[`Deco_x0020_${i}_x0020_SetupCost`]!=null?String(sp[`Deco_x0020_${i}_x0020_SetupCost`]):"",
       });
     }
   }
   if(!form.decorations.length)form.decorations=[{method:"",location:"",dimensions:"",logo:"",colors:"",pms:"",setupSell:"",setupCost:""}];
   // Load project-level settings
   if(currentProject){
-    form.programOwnership=currentProject.Program_x0020_Ownership||"Client Owned";
-    form.marginFloor=currentProject.Margin_x0020_Floor!=null?String(currentProject.Margin_x0020_Floor):"40";
-    form.blpOwnershipUpcharge=currentProject.BLP_x0020_Upcharge_x0020_Pct!=null?String(currentProject.BLP_x0020_Upcharge_x0020_Pct):"15";
-    form.hasSpread=currentProject.Has_x0020_Spread||"No";
-    form.spreadAmount=currentProject.Spread_x0020_Amount||"";
-    form.shippingUpchargeType=currentProject.Ship_x0020_Upcharge_x0020_Type||"None";
-    form.shippingUpchargeAmount=currentProject.Ship_x0020_Upcharge_x0020_Amount!=null?String(currentProject.Ship_x0020_Upcharge_x0020_Amount):"";
-    form.clientSuppliedStock=currentProject.Client_x0020_Supplied_x0020_Stock||"No";
+    form.programOwnership=currentProject.ProgramOwnership||"Client Owned";
+    form.marginFloor=currentProject.MarginFloor!=null?String(currentProject.MarginFloor):"40";
+    form.blpOwnershipUpcharge=currentProject.BLPUpchargePct!=null?String(currentProject.BLPUpchargePct):"15";
+    form.hasSpread=currentProject.HasSpread||"No";
+    form.spreadAmount=currentProject.SpreadAmount||"";
+    form.shippingUpchargeType=currentProject.ShipUpchargeType||"None";
+    form.shippingUpchargeAmount=currentProject.ShipUpchargeAmount!=null?String(currentProject.ShipUpchargeAmount):"";
+    form.clientSuppliedStock=currentProject.ClientSuppliedStock||"No";
   }
 }
 
@@ -660,19 +660,19 @@ function compBadge(pct){return `<span class="comp-badge ${compColor(pct)}">${pct
 // Compute completeness from SP fields without loading into form
 function computeProductCompleteness(prod){
   // Quick check based on SP fields
-  const salesFields=['Supplier','Product_x0020_Category','Vendor_x0020_Item_x0020_Num','Title','Item_x0020_Description','Decoration_x0020_Supplier','Standard_x0020_Lead_x0020_Time'];
+  const salesFields=['Supplier','ProductCategory','VendorItemNum','Title','ItemDescription','DecorationSupplier','StandardLeadTime'];
   const salesDone=salesFields.filter(f=>prod[f]&&prod[f]!=="0").length;
-  const salesHasCost=prod.Item_x0020_Cost_x0020_Net!=null&&prod.Item_x0020_Cost_x0020_Net>0;
+  const salesHasCost=prod.ItemCostNet!=null&&prod.ItemCostNet>0;
   const salesHasDeco=!!prod.Deco_x0020_1_x0020_Method;
   const sDone=salesDone+(salesHasCost?1:0)+(salesHasDeco?1:0);
   const sTotal=salesFields.length+2;
   const sPct=Math.round(sDone/sTotal*100);
 
-  const adminFields=['Item_x0020_Weight'];
+  const adminFields=['ItemWeight'];
   const adminDone=adminFields.filter(f=>prod[f]&&prod[f]!=="0").length;
   const aPct=adminFields.length>0?Math.round(adminDone/adminFields.length*100):100;
 
-  const progFields=['BLP_x0020_Website_x0020_Item_x0020_Num','Standard_x0020_Lead_x0020_Time'];
+  const progFields=['BLPWebsiteItemNum','StandardLeadTime'];
   const progDone=progFields.filter(f=>prod[f]&&prod[f]!=="0").length;
   const pPct=progFields.length>0?Math.round(progDone/progFields.length*100):100;
 
@@ -849,14 +849,14 @@ function startNewProduct(){
   form=getDefaults();
   // Load project-level settings
   if(currentProject){
-    form.programOwnership=currentProject.Program_x0020_Ownership||"Client Owned";
-    form.marginFloor=currentProject.Margin_x0020_Floor!=null?String(currentProject.Margin_x0020_Floor):"40";
-    form.blpOwnershipUpcharge=currentProject.BLP_x0020_Upcharge_x0020_Pct!=null?String(currentProject.BLP_x0020_Upcharge_x0020_Pct):"15";
-    form.hasSpread=currentProject.Has_x0020_Spread||"No";
-    form.spreadAmount=currentProject.Spread_x0020_Amount||"";
-    form.shippingUpchargeType=currentProject.Ship_x0020_Upcharge_x0020_Type||"None";
-    form.shippingUpchargeAmount=currentProject.Ship_x0020_Upcharge_x0020_Amount!=null?String(currentProject.Ship_x0020_Upcharge_x0020_Amount):"";
-    form.clientSuppliedStock=currentProject.Client_x0020_Supplied_x0020_Stock||"No";
+    form.programOwnership=currentProject.ProgramOwnership||"Client Owned";
+    form.marginFloor=currentProject.MarginFloor!=null?String(currentProject.MarginFloor):"40";
+    form.blpOwnershipUpcharge=currentProject.BLPUpchargePct!=null?String(currentProject.BLPUpchargePct):"15";
+    form.hasSpread=currentProject.HasSpread||"No";
+    form.spreadAmount=currentProject.SpreadAmount||"";
+    form.shippingUpchargeType=currentProject.ShipUpchargeType||"None";
+    form.shippingUpchargeAmount=currentProject.ShipUpchargeAmount!=null?String(currentProject.ShipUpchargeAmount):"";
+    form.clientSuppliedStock=currentProject.ClientSuppliedStock||"No";
   }
   currentProduct=null;currentStep=0;modified={};
   appView="form";render();
@@ -918,7 +918,7 @@ function renderDashboard(app){
         ${projects.map(proj=>`
           <div class="dash-card" onclick="openProject(${JSON.stringify(proj).replace(/"/g,'&quot;')})">
             <div class="dash-card-title">${proj.Title||'Untitled'}</div>
-            <div class="dash-card-sub">${proj.Program_x0020_Name||''} ${proj.Sales_x0020_Rep?'— '+proj.Sales_x0020_Rep:''}</div>
+            <div class="dash-card-sub">${proj.ProgramName||''} ${proj.SalesRep?'— '+proj.SalesRep:''}</div>
             <div class="dash-card-meta">${statusBadge(proj.Status)}</div>
           </div>
         `).join('')}
@@ -958,11 +958,11 @@ async function handleCreateProject(){
   try{
     await createProject({
       Title:client,
-      Program_x0020_Name:program,
-      Sales_x0020_Rep:rep,
-      Program_x0020_Ownership:document.getElementById('npOwnership').value,
-      Margin_x0020_Floor:parseFloat(document.getElementById('npMargin').value)||40,
-      BLP_x0020_Upcharge_x0020_Pct:parseFloat(document.getElementById('npUpcharge').value)||15,
+      ProgramName:program,
+      SalesRep:rep,
+      ProgramOwnership:document.getElementById('npOwnership').value,
+      MarginFloor:parseFloat(document.getElementById('npMargin').value)||40,
+      BLPUpchargePct:parseFloat(document.getElementById('npUpcharge').value)||15,
       Status:"Active",
     });
     showToast("Project created!");
@@ -976,8 +976,8 @@ function renderProjectDetail(app){
 
   // Compute completeness stats
   const compStats=products.map(p=>({prod:p,comp:computeProductCompleteness(p)}));
-  const submitted=products.filter(p=>p.Submission_x0020_Status==="Submitted"||p.Submission_x0020_Status==="Admin Review"||p.Submission_x0020_Status==="Programs Review"||p.Submission_x0020_Status==="Complete").length;
-  const drafts=products.filter(p=>!p.Submission_x0020_Status||p.Submission_x0020_Status==="Draft").length;
+  const submitted=products.filter(p=>p.SubmissionStatus==="Submitted"||p.SubmissionStatus==="Admin Review"||p.SubmissionStatus==="Programs Review"||p.SubmissionStatus==="Complete").length;
+  const drafts=products.filter(p=>!p.SubmissionStatus||p.SubmissionStatus==="Draft").length;
   const needsAttention=compStats.filter(c=>c.comp.sales<100).length;
   const avgComp=products.length>0?Math.round(compStats.reduce((s,c)=>s+c.comp.overall,0)/products.length):0;
 
@@ -993,8 +993,8 @@ function renderProjectDetail(app){
       </div>
     </div>
     <div class="project-bar">
-      <div class="project-info"><strong>${proj.Title||''}</strong><span class="sep">|</span>${proj.Program_x0020_Name||''}<span class="sep">|</span>${proj.Sales_x0020_Rep||''}</div>
-      <div class="project-info"><span>${proj.Program_x0020_Ownership||'Client Owned'}</span><span class="sep">|</span><span>Margin: ${proj.Margin_x0020_Floor||40}%</span></div>
+      <div class="project-info"><strong>${proj.Title||''}</strong><span class="sep">|</span>${proj.ProgramName||''}<span class="sep">|</span>${proj.SalesRep||''}</div>
+      <div class="project-info"><span>${proj.ProgramOwnership||'Client Owned'}</span><span class="sep">|</span><span>Margin: ${proj.MarginFloor||40}%</span></div>
     </div>
     <div class="dash-container">
       <div class="dash-summary">
@@ -1019,7 +1019,7 @@ function renderProjectDetail(app){
           <div class="product-row" onclick="openProduct(${JSON.stringify(prod).replace(/"/g,'&quot;')})">
             <div class="product-row-left">
               <div><div class="product-row-name">${prod.Title||'Untitled'}</div>
-              <div class="product-row-meta">${prod.Supplier||''} ${prod.Product_x0020_Category?'— '+prod.Product_x0020_Category:''} ${prod.Vendor_x0020_Item_x0020_Num?'('+prod.Vendor_x0020_Item_x0020_Num+')':''}</div>
+              <div class="product-row-meta">${prod.Supplier||''} ${prod.ProductCategory?'— '+prod.ProductCategory:''} ${prod.VendorItemNum?'('+prod.VendorItemNum+')':''}</div>
               <div style="display:flex;gap:8px;margin-top:4px">
                 ${compBar(comp.sales,'Sales')}
                 ${role!=='sales'?compBar(comp.admin,'Admin'):''}
@@ -1028,7 +1028,7 @@ function renderProjectDetail(app){
               </div>
             </div>
             <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-              <span class="product-row-status ${statusCls(prod.Submission_x0020_Status)}">${prod.Submission_x0020_Status||'Draft'}</span>
+              <span class="product-row-status ${statusCls(prod.SubmissionStatus)}">${prod.SubmissionStatus||'Draft'}</span>
               ${compBadge(comp.overall)}
             </div>
           </div>
@@ -1056,7 +1056,7 @@ function renderForm(app){
       </div>
     </div>
     <div class="project-bar">
-      <div class="project-info"><strong>${proj?.Title||''}</strong><span class="sep">|</span>${proj?.Program_x0020_Name||''}<span class="sep">|</span>${proj?.Sales_x0020_Rep||''}</div>
+      <div class="project-info"><strong>${proj?.Title||''}</strong><span class="sep">|</span>${proj?.ProgramName||''}<span class="sep">|</span>${proj?.SalesRep||''}</div>
       <div class="project-info">${form.itemName?'<strong>'+form.itemName+'</strong>':''} ${form.vendorItemNum?'('+form.vendorItemNum+')':''} ${currentProduct?.id?'<span style="color:#27ae60;font-size:10px">● Saved</span>':'<span style="color:#b7950b;font-size:10px">● New</span>'} ${compBadge(salesScore().pct)}</div>
     </div>
     <div class="steps-bar">${steps.map((s,i)=>{
