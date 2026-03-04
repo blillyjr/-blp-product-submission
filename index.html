@@ -168,6 +168,49 @@ textarea{resize:vertical}
 .dash-summary-num{font-size:24px;font-weight:700}
 .dash-summary-label{font-size:11px;color:#7f8c8d}
 .product-row-comp{display:flex;align-items:center;gap:6px;min-width:120px}
+/* Bulk Import */
+.modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px}
+.modal{background:#fff;border-radius:12px;max-width:900px;width:100%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.modal-header{display:flex;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid #e8ecef}
+.modal-title{font-size:18px;font-weight:700;color:#1a5276}
+.modal-close{background:none;border:none;font-size:24px;cursor:pointer;color:#7f8c8d;padding:4px 8px}
+.modal-close:hover{color:#2c3e50}
+.modal-body{padding:20px 24px;overflow-y:auto;flex:1}
+.modal-footer{display:flex;justify-content:space-between;align-items:center;padding:16px 24px;border-top:1px solid #e8ecef;gap:12px}
+.import-tabs{display:flex;gap:4px;margin-bottom:16px}
+.import-tab{padding:8px 20px;border-radius:8px;font-size:13px;cursor:pointer;font-family:'DM Sans',sans-serif;border:1.5px solid #d5dbdb;background:#fff;color:#7f8c8d;font-weight:600}
+.import-tab.active{border-color:#1a5276;background:#d6eaf8;color:#1a5276}
+.paste-area{width:100%;min-height:200px;padding:12px;border:2px dashed #d5dbdb;border-radius:8px;font-family:'Courier New',monospace;font-size:12px;resize:vertical;outline:none;transition:border-color .2s}
+.paste-area:focus{border-color:#1a5276}
+.paste-area::placeholder{color:#bdc3c7;font-family:'DM Sans',sans-serif;font-size:13px}
+.upload-zone{border:2px dashed #d5dbdb;border-radius:8px;padding:40px 20px;text-align:center;cursor:pointer;transition:all .2s}
+.upload-zone:hover{border-color:#1a5276;background:#f8f9fa}
+.upload-zone-icon{font-size:36px;margin-bottom:8px}
+.upload-zone-text{font-size:14px;color:#7f8c8d;font-weight:600}
+.upload-zone-sub{font-size:11px;color:#bdc3c7;margin-top:4px}
+.import-preview{width:100%;border-collapse:collapse;margin-top:12px;font-size:12px}
+.import-preview th{background:#1a5276;color:#fff;padding:8px 10px;text-align:left;font-size:11px;font-weight:600;position:sticky;top:0}
+.import-preview td{padding:6px 10px;border-bottom:1px solid #f2f3f4}
+.import-preview tr:nth-child(even){background:#f8f9fa}
+.import-preview tr:hover{background:#eaf2f8}
+.import-preview select{padding:4px 6px;font-size:11px;border:1px solid #d5dbdb;border-radius:4px;font-family:'DM Sans',sans-serif}
+.mapping-row{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid #f2f3f4}
+.mapping-src{flex:1;font-size:12px;font-weight:600;color:#2c3e50}
+.mapping-arrow{color:#7f8c8d;font-size:14px}
+.mapping-dest select{padding:6px 8px;font-size:12px;border:1px solid #d5dbdb;border-radius:6px;min-width:200px;font-family:'DM Sans',sans-serif}
+.import-stats{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+.import-stat{background:#f8f9fa;border-radius:8px;padding:10px 16px;text-align:center}
+.import-stat-num{font-size:20px;font-weight:700;color:#1a5276}
+.import-stat-label{font-size:10px;color:#7f8c8d}
+.import-progress{height:8px;background:#e8ecef;border-radius:4px;overflow:hidden;margin:12px 0}
+.import-progress-fill{height:100%;background:#27ae60;border-radius:4px;transition:width .3s}
+.btn-import{padding:10px 28px;border-radius:8px;font-size:14px;cursor:pointer;font-family:'DM Sans',sans-serif;border:none;background:#1a5276;color:#fff;font-weight:600;box-shadow:0 2px 6px rgba(26,82,118,.2)}
+.btn-import:hover{background:#154360}
+.btn-import:disabled{background:#bdc3c7;cursor:not-allowed;box-shadow:none}
+.btn-import.importing{background:#f39c12}
+.preview-scroll{max-height:300px;overflow:auto;border:1px solid #e8ecef;border-radius:8px}
+.import-error{background:#fdedec;border:1px solid #f5b7b1;border-radius:6px;padding:8px 12px;font-size:12px;color:#c0392b;margin-top:8px}
+.import-success{background:#eafaf1;border:1px solid #a9dfbf;border-radius:6px;padding:8px 12px;font-size:12px;color:#1e8449;margin-top:8px}
 </style>
 </head>
 <body>
@@ -209,14 +252,34 @@ function initMsal(){
 }
 async function login(){
   try{
-    const resp=await msalInstance.loginPopup({scopes:CONFIG.scopes});
+    let resp;
+    try{
+      resp=await msalInstance.loginPopup({scopes:CONFIG.scopes});
+    }catch(popupErr){
+      // If popup blocked or fails, fall back to redirect
+      console.warn("Popup failed, trying redirect:",popupErr);
+      if(popupErr.errorCode==="popup_window_error"||popupErr.errorCode==="empty_window_error"||popupErr.errorCode==="monitor_window_timeout"){
+        msalInstance.loginRedirect({scopes:CONFIG.scopes});
+        return;
+      }
+      throw popupErr;
+    }
     userName=resp.account.name||resp.account.username;
     await getToken();
     await initSharePoint();
     appView="dashboard";
     await loadProjects();
     render();
-  }catch(e){console.error("Login error:",e);showToast("Login failed. Please try again.","error");}
+  }catch(e){
+    console.error("Login error:",e);
+    let msg="Login failed. ";
+    if(e.errorCode==="user_cancelled")msg="Login was cancelled.";
+    else if(e.errorCode==="consent_required")msg="Admin consent required. Ask Bob to grant consent in Azure portal.";
+    else if(e.errorCode==="interaction_in_progress")msg="A login is already in progress. Refresh the page and try again.";
+    else if(e.errorMessage)msg+=e.errorMessage.split(".")[0]+".";
+    else msg+="Please try again.";
+    showToast(msg,"error");
+  }
 }
 async function getToken(){
   const accounts=msalInstance.getAllAccounts();
@@ -303,7 +366,7 @@ function formToSPFields(){
     ItemDescription:form.itemDescription,
     StockStatus:form.stockStatus,
     IsChildrens:form.isChildrens,
-    NeedsProp_x0020_65:form.needsProp65,
+    NeedsProp65:form.needsProp65,
     OverseasDirect:form.isOverseasDirect,
     SupplierMinimum:p(form.supplierMinimum)||null,
     WebsiteMinimum:p(form.websiteMinimum)||null,
@@ -338,9 +401,9 @@ function formToSPFields(){
     PMSSell:p(form.pmsSell)||null,
     FinalSellSB:p(form.finalSellSB)||null,
     ProductURL:form.productURL,
-    Co_x002d_opNum:form.coopNum,
+    CoopNum:form.coopNum,
     StandardLeadTime:form.standardLeadTime,
-    Is_x0020_24hrAvailable:form.is24HrAvailable,
+    Is24hrAvailable:form.is24HrAvailable,
     LowParLevel:p(form.lowParLevel)||null,
     Notes:form.notes,
     BLPWebsiteItemNum:form.blpWebsiteItemNum,
@@ -362,14 +425,14 @@ function formToSPFields(){
   for(let i=0;i<4;i++){
     const d=form.decorations[i]||{};
     const n=i+1;
-    f[`Deco_x0020_${n}_x0020_Method`]=d.method||null;
-    f[`Deco_x0020_${n}_x0020_Location`]=d.location||null;
-    f[`Deco_x0020_${n}_x0020_Dimensions`]=d.dimensions||null;
-    f[`Deco_x0020_${n}_x0020_Logo`]=d.logo||null;
-    f[`Deco_x0020_${n}_x0020_Colors`]=d.colors||null;
-    f[`Deco_x0020_${n}_x0020_PMS`]=d.pms||null;
-    f[`Deco_x0020_${n}_x0020_SetupSell`]=p(d.setupSell)||null;
-    f[`Deco_x0020_${n}_x0020_SetupCost`]=p(d.setupCost)||null;
+    f[`Deco${n}Method`]=d.method||null;
+    f[`Deco${n}Location`]=d.location||null;
+    f[`Deco${n}Dimensions`]=d.dimensions||null;
+    f[`Deco${n}Logo`]=d.logo||null;
+    f[`Deco${n}Colors`]=d.colors||null;
+    f[`Deco${n}PMS`]=d.pms||null;
+    f[`Deco${n}SetupSell`]=p(d.setupSell)||null;
+    f[`Deco${n}SetupCost`]=p(d.setupCost)||null;
   }
   return f;
 }
@@ -385,7 +448,7 @@ function spFieldsToForm(sp){
   form.itemDescription=sp.ItemDescription||"";
   form.stockStatus=sp.StockStatus||"In Stock";
   form.isChildrens=sp.IsChildrens||"No";
-  form.needsProp65=sp.NeedsProp_x0020_65||"No";
+  form.needsProp65=sp.NeedsProp65||"No";
   form.isOverseasDirect=sp.OverseasDirect||"No";
   form.supplierMinimum=sp.SupplierMinimum!=null?String(sp.SupplierMinimum):"";
   form.websiteMinimum=sp.WebsiteMinimum!=null?String(sp.WebsiteMinimum):"1";
@@ -420,9 +483,9 @@ function spFieldsToForm(sp){
   form.pmsSell=sp.PMSSell!=null?String(sp.PMSSell):"";
   form.finalSellSB=sp.FinalSellSB!=null?String(sp.FinalSellSB):"";
   form.productURL=sp.ProductURL||"";
-  form.coopNum=sp.Co_x002d_opNum||"";
+  form.coopNum=sp.CoopNum||"";
   form.standardLeadTime=sp.StandardLeadTime||"";
-  form.is24HrAvailable=sp.Is_x0020_24hrAvailable||"No";
+  form.is24HrAvailable=sp.Is24hrAvailable||"No";
   form.lowParLevel=sp.LowParLevel!=null?String(sp.LowParLevel):"";
   form.notes=sp.Notes||"";
   form.blpWebsiteItemNum=sp.BLPWebsiteItemNum||"";
@@ -444,14 +507,14 @@ function spFieldsToForm(sp){
   // Load decorations
   form.decorations=[];
   for(let i=1;i<=4;i++){
-    const m=sp[`Deco_x0020_${i}_x0020_Method`];
+    const m=sp[`Deco${i}Method`];
     if(m){
       form.decorations.push({
-        method:m||"",location:sp[`Deco_x0020_${i}_x0020_Location`]||"",
-        dimensions:sp[`Deco_x0020_${i}_x0020_Dimensions`]||"",logo:sp[`Deco_x0020_${i}_x0020_Logo`]||"",
-        colors:sp[`Deco_x0020_${i}_x0020_Colors`]||"",pms:sp[`Deco_x0020_${i}_x0020_PMS`]||"",
-        setupSell:sp[`Deco_x0020_${i}_x0020_SetupSell`]!=null?String(sp[`Deco_x0020_${i}_x0020_SetupSell`]):"",
-        setupCost:sp[`Deco_x0020_${i}_x0020_SetupCost`]!=null?String(sp[`Deco_x0020_${i}_x0020_SetupCost`]):"",
+        method:m||"",location:sp[`Deco${i}Location`]||"",
+        dimensions:sp[`Deco${i}Dimensions`]||"",logo:sp[`Deco${i}Logo`]||"",
+        colors:sp[`Deco${i}Colors`]||"",pms:sp[`Deco${i}PMS`]||"",
+        setupSell:sp[`Deco${i}SetupSell`]!=null?String(sp[`Deco${i}SetupSell`]):"",
+        setupCost:sp[`Deco${i}SetupCost`]!=null?String(sp[`Deco${i}SetupCost`]):"",
       });
     }
   }
@@ -663,7 +726,7 @@ function computeProductCompleteness(prod){
   const salesFields=['Supplier','ProductCategory','VendorItemNum','Title','ItemDescription','DecorationSupplier','StandardLeadTime'];
   const salesDone=salesFields.filter(f=>prod[f]&&prod[f]!=="0").length;
   const salesHasCost=prod.ItemCostNet!=null&&prod.ItemCostNet>0;
-  const salesHasDeco=!!prod.Deco_x0020_1_x0020_Method;
+  const salesHasDeco=!!prod.Deco1Method;
   const sDone=salesDone+(salesHasCost?1:0)+(salesHasDeco?1:0);
   const sTotal=salesFields.length+2;
   const sPct=Math.round(sDone/sTotal*100);
@@ -873,6 +936,395 @@ function backToProject(){appView="projectdetail";currentStep=0;render();}
 // ============================================================
 // MAIN RENDER
 // ============================================================
+// ============================================================
+// BULK IMPORT
+// ============================================================
+let importState={tab:'paste',rawData:[],headers:[],mapping:{},parsed:[],importing:false,progress:0,results:null};
+
+const IMPORT_FIELDS=[
+  {key:'itemName',label:'Item Name',spField:'Title',required:true},
+  {key:'supplier',label:'Supplier',spField:'Supplier',required:true},
+  {key:'websiteCategory',label:'Product Category',spField:'ProductCategory',required:true},
+  {key:'vendorItemNum',label:'Vendor Item #',spField:'VendorItemNum',required:true},
+  {key:'itemColor',label:'Item Color',spField:'ItemColor'},
+  {key:'itemDescription',label:'Item Description',spField:'ItemDescription'},
+  {key:'stockStatus',label:'Stock Status',spField:'StockStatus'},
+  {key:'supplierMinimum',label:'Supplier Minimum',spField:'SupplierMinimum',num:true},
+  {key:'websiteMinimum',label:'Website Minimum',spField:'WebsiteMinimum',num:true},
+  {key:'firstQtyToOrder',label:'1st Qty to Order',spField:'FirstQtytoOrder',num:true},
+  {key:'itemCostNet',label:'Item Cost (Net)',spField:'ItemCostNet',num:true,required:true},
+  {key:'runCharge',label:'Run Charge',spField:'RunCharge',num:true},
+  {key:'runChargeAddlLocation',label:'Run Charge Addl Location',spField:'RunChargeAddl',num:true},
+  {key:'repeatSetup',label:'Repeat Setup',spField:'RepeatSetup',num:true},
+  {key:'initialSetupCharge',label:'Initial Setup Charge',spField:'InitialSetupCharge',num:true},
+  {key:'foldingPolybag',label:'Folding/Polybag',spField:'FoldingPolybag',num:true},
+  {key:'shirtSizeSticker',label:'Size Sticker',spField:'ShirtSizeSticker',num:true},
+  {key:'decorationSupplier',label:'Decoration Supplier',spField:'DecorationSupplier'},
+  {key:'deco1Method',label:'Decoration 1 Method',spField:'Deco1Method'},
+  {key:'deco1Location',label:'Decoration 1 Location',spField:'Deco1Location'},
+  {key:'deco1Colors',label:'Decoration 1 Colors',spField:'Deco1Colors'},
+  {key:'deco1PMS',label:'Decoration 1 PMS Colors',spField:'Deco1PMS'},
+  {key:'deco1SetupCost',label:'Decoration 1 Setup Cost',spField:'Deco1SetupCost',num:true},
+  {key:'itemWeight',label:'Item Weight',spField:'ItemWeight'},
+  {key:'itemSizeDimensional',label:'Item Dimensions',spField:'ItemSizeDimensional'},
+  {key:'shipsIn',label:'Ships In',spField:'ShipsIn'},
+  {key:'standardLeadTime',label:'Lead Time',spField:'StandardLeadTime'},
+  {key:'productURL',label:'Product URL',spField:'ProductURL'},
+  {key:'blpWebsiteItemNum',label:'BLP Website Item #',spField:'BLPWebsiteItemNum'},
+  {key:'websiteDescription',label:'Website Description',spField:'WebsiteDescription'},
+  {key:'currentWebsitePrice',label:'Website Price',spField:'CurrentWebsitePrice',num:true},
+  {key:'lowParLevel',label:'Low Par Level',spField:'LowParLevel',num:true},
+];
+
+function openBulkImport(){
+  importState={tab:'paste',rawData:[],headers:[],mapping:{},parsed:[],importing:false,progress:0,results:null};
+  renderBulkImportModal();
+}
+
+function closeBulkImport(){
+  document.getElementById('bulkImportModal')?.remove();
+}
+
+function renderBulkImportModal(){
+  let existing=document.getElementById('bulkImportModal');
+  if(!existing){existing=document.createElement('div');existing.id='bulkImportModal';document.body.appendChild(existing);}
+  const s=importState;
+  let body='';
+  
+  if(!s.results){
+    // Step 1: Input (paste or upload)
+    if(s.headers.length===0){
+      body=`
+        <div class="import-tabs">
+          <button class="import-tab ${s.tab==='paste'?'active':''}" onclick="importState.tab='paste';renderBulkImportModal()">Paste from Excel</button>
+          <button class="import-tab ${s.tab==='upload'?'active':''}" onclick="importState.tab='upload';renderBulkImportModal()">Upload File</button>
+        </div>
+        ${s.tab==='paste'?`
+          <p style="font-size:12px;color:#7f8c8d;margin-bottom:8px">Copy rows from Excel (with headers in the first row) and paste below. Tab-separated data is automatically detected.</p>
+          <textarea class="paste-area" id="pasteInput" placeholder="Paste your Excel data here...&#10;&#10;Item Name&#9;Supplier&#9;Category&#9;Item Cost&#9;...&#10;Blue Pen&#9;Hit Promo&#9;Writing&#9;1.25&#9;...&#10;Red Mug&#9;Rainer&#9;Drinkware&#9;4.50&#9;...">${s._pasteVal||''}</textarea>
+        `:`
+          <div class="upload-zone" onclick="document.getElementById('fileUploadInput').click()">
+            <div class="upload-zone-icon">📁</div>
+            <div class="upload-zone-text">Click to select an Excel file (.xlsx, .csv)</div>
+            <div class="upload-zone-sub">Or drag and drop the file here</div>
+          </div>
+          <input type="file" id="fileUploadInput" accept=".xlsx,.xls,.csv,.tsv" style="display:none" onchange="handleFileUpload(event)">
+        `}
+      `;
+    }
+    // Step 2: Column Mapping
+    else if(s.parsed.length===0){
+      body=`
+        <div class="import-stats">
+          <div class="import-stat"><div class="import-stat-num">${s.rawData.length}</div><div class="import-stat-label">Rows Found</div></div>
+          <div class="import-stat"><div class="import-stat-num">${s.headers.length}</div><div class="import-stat-label">Columns</div></div>
+        </div>
+        <p style="font-size:13px;font-weight:600;color:#1a5276;margin-bottom:12px">Map your columns to product fields:</p>
+        <p style="font-size:11px;color:#7f8c8d;margin-bottom:12px">We auto-matched what we could. Review and adjust the mappings below.</p>
+        <div style="max-height:400px;overflow-y:auto">
+          ${s.headers.map((h,i)=>`
+            <div class="mapping-row">
+              <div class="mapping-src">${h} <span style="color:#bdc3c7;font-weight:400;font-size:11px">(${s.rawData[0]?s.rawData[0][i]||'empty':''})</span></div>
+              <div class="mapping-arrow">→</div>
+              <div class="mapping-dest">
+                <select onchange="importState.mapping['${i}']=this.value;renderBulkImportModal()">
+                  <option value="">— Skip this column —</option>
+                  ${IMPORT_FIELDS.map(f=>`<option value="${f.key}" ${s.mapping[String(i)]===f.key?'selected':''}>${f.label}${f.required?' *':''}</option>`).join('')}
+                </select>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+    // Step 3: Preview
+    else{
+      const mappedFields=Object.values(s.mapping).filter(v=>v);
+      const displayFields=IMPORT_FIELDS.filter(f=>mappedFields.includes(f.key));
+      body=`
+        <div class="import-stats">
+          <div class="import-stat"><div class="import-stat-num">${s.parsed.length}</div><div class="import-stat-label">Products to Import</div></div>
+          <div class="import-stat"><div class="import-stat-num">${displayFields.length}</div><div class="import-stat-label">Fields Mapped</div></div>
+          <div class="import-stat"><div class="import-stat-num">${s.parsed.filter(r=>r.itemName&&r.itemCostNet).length}</div><div class="import-stat-label">With Name + Cost</div></div>
+        </div>
+        <p style="font-size:12px;color:#7f8c8d;margin-bottom:8px">Review the data below. Products will be created as Drafts with completeness scoring — you can fill in missing fields later.</p>
+        ${s.importing?`
+          <div class="import-progress"><div class="import-progress-fill" style="width:${s.progress}%"></div></div>
+          <div style="text-align:center;font-size:13px;color:#1a5276;font-weight:600">Importing... ${Math.round(s.progress)}%</div>
+        `:''}
+        <div class="preview-scroll">
+          <table class="import-preview">
+            <thead><tr>${displayFields.map(f=>`<th>${f.label}</th>`).join('')}</tr></thead>
+            <tbody>${s.parsed.slice(0,50).map((row,ri)=>`<tr>${displayFields.map(f=>`<td>${row[f.key]||'<span style="color:#bdc3c7">—</span>'}</td>`).join('')}</tr>`).join('')}
+            ${s.parsed.length>50?`<tr><td colspan="${displayFields.length}" style="text-align:center;color:#7f8c8d;font-style:italic">...and ${s.parsed.length-50} more rows</td></tr>`:''}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+  }else{
+    // Step 4: Results
+    const r=s.results;
+    body=`
+      <div class="import-stats">
+        <div class="import-stat"><div class="import-stat-num" style="color:#27ae60">${r.success}</div><div class="import-stat-label">Imported</div></div>
+        <div class="import-stat"><div class="import-stat-num" style="color:#e74c3c">${r.failed}</div><div class="import-stat-label">Failed</div></div>
+        <div class="import-stat"><div class="import-stat-num">${r.total}</div><div class="import-stat-label">Total</div></div>
+      </div>
+      ${r.success>0?`<div class="import-success">✓ Successfully imported ${r.success} product${r.success>1?'s':''}. They appear as Drafts in your product list.</div>`:''}
+      ${r.errors.length>0?`<div class="import-error">⚠ ${r.errors.length} product${r.errors.length>1?'s':''} failed to import:<br>${r.errors.slice(0,5).map(e=>`• Row ${e.row}: ${e.msg}`).join('<br>')}${r.errors.length>5?`<br>...and ${r.errors.length-5} more`:''}
+      </div>`:''}
+    `;
+  }
+
+  // Footer buttons
+  let footer='';
+  if(s.results){
+    footer=`<div></div><button class="btn-import" onclick="finishBulkImport()">Done</button>`;
+  }else if(s.headers.length===0){
+    footer=`<div style="font-size:11px;color:#7f8c8d">Step 1 of 3: Provide Data</div><button class="btn-import" onclick="parseImportData()">Next: Map Columns →</button>`;
+  }else if(s.parsed.length===0){
+    footer=`<button class="btn-back" onclick="importState.headers=[];importState.rawData=[];renderBulkImportModal()">← Back</button><button class="btn-import" onclick="buildPreview()">Next: Preview →</button>`;
+  }else if(!s.importing){
+    footer=`<button class="btn-back" onclick="importState.parsed=[];renderBulkImportModal()">← Back</button><button class="btn-import" onclick="executeBulkImport()">Import ${s.parsed.length} Product${s.parsed.length>1?'s':''}</button>`;
+  }else{
+    footer=`<div style="font-size:12px;color:#7f8c8d">Please wait...</div><button class="btn-import importing" disabled>Importing...</button>`;
+  }
+
+  existing.innerHTML=`
+    <div class="modal-overlay" onclick="if(event.target===this&&!importState.importing)closeBulkImport()">
+      <div class="modal">
+        <div class="modal-header">
+          <div class="modal-title">📥 Bulk Import Products</div>
+          ${!s.importing?'<button class="modal-close" onclick="closeBulkImport()">×</button>':''}
+        </div>
+        <div class="modal-body">${body}</div>
+        <div class="modal-footer">${footer}</div>
+      </div>
+    </div>
+  `;
+}
+
+function parseImportData(){
+  const s=importState;
+  let text='';
+  if(s.tab==='paste'){
+    text=document.getElementById('pasteInput')?.value||'';
+    s._pasteVal=text;
+    if(!text.trim()){showToast('Please paste your data first.','error');return;}
+  }else if(s._fileData){
+    text=s._fileData;
+  }else{
+    showToast('Please select a file first.','error');return;
+  }
+
+  // Parse TSV/CSV
+  const lines=text.trim().split(/\r?\n/);
+  if(lines.length<2){showToast('Need at least a header row and one data row.','error');return;}
+  
+  // Detect delimiter (tab or comma)
+  const delim=lines[0].includes('\t')?'\t':',';
+  
+  // Parse with basic CSV handling
+  function parseLine(line){
+    if(delim==='\t')return line.split('\t').map(c=>c.trim());
+    const cells=[];let cur='',inQ=false;
+    for(let i=0;i<line.length;i++){
+      const ch=line[i];
+      if(ch==='"'){inQ=!inQ;}
+      else if(ch===delim&&!inQ){cells.push(cur.trim());cur='';}
+      else{cur+=ch;}
+    }
+    cells.push(cur.trim());
+    return cells;
+  }
+  
+  s.headers=parseLine(lines[0]);
+  s.rawData=lines.slice(1).filter(l=>l.trim()).map(l=>parseLine(l));
+  
+  // Auto-map columns by fuzzy matching
+  s.mapping={};
+  const normalize=str=>str.toLowerCase().replace(/[^a-z0-9]/g,'');
+  s.headers.forEach((h,i)=>{
+    const nh=normalize(h);
+    // Try exact-ish matches
+    const match=IMPORT_FIELDS.find(f=>{
+      const nl=normalize(f.label);
+      const nk=normalize(f.key);
+      return nh===nl||nh===nk||nh.includes(nl)||nl.includes(nh);
+    });
+    // More fuzzy matches
+    if(!match){
+      const fuzzy=IMPORT_FIELDS.find(f=>{
+        const nl=normalize(f.label);
+        if(nh.includes('item')&&nh.includes('name')&&f.key==='itemName')return true;
+        if(nh.includes('item')&&nh.includes('cost')&&f.key==='itemCostNet')return true;
+        if(nh.includes('vendor')&&nh.includes('item')&&f.key==='vendorItemNum')return true;
+        if(nh.includes('supplier')&&!nh.includes('min')&&f.key==='supplier')return true;
+        if(nh.includes('category')&&f.key==='websiteCategory')return true;
+        if(nh.includes('description')&&!nh.includes('web')&&f.key==='itemDescription')return true;
+        if(nh.includes('color')&&!nh.includes('pms')&&!nh.includes('deco')&&f.key==='itemColor')return true;
+        if(nh.includes('run')&&nh.includes('charge')&&!nh.includes('addl')&&f.key==='runCharge')return true;
+        if(nh.includes('setup')&&nh.includes('charge')&&f.key==='initialSetupCharge')return true;
+        if(nh.includes('qty')&&nh.includes('order')&&f.key==='firstQtyToOrder')return true;
+        if(nh.includes('weight')&&f.key==='itemWeight')return true;
+        if(nh.includes('lead')&&nh.includes('time')&&f.key==='standardLeadTime')return true;
+        if(nh.includes('website')&&nh.includes('price')&&f.key==='currentWebsitePrice')return true;
+        if(nh.includes('stock')&&f.key==='stockStatus')return true;
+        if((nh==='name'||nh==='itemname'||nh==='productname')&&f.key==='itemName')return true;
+        if((nh==='cost'||nh==='unitcost'||nh==='netcost')&&f.key==='itemCostNet')return true;
+        if(nh==='url'||nh==='link'||nh==='producturl')return f.key==='productURL';
+        return false;
+      });
+      if(fuzzy)s.mapping[String(i)]=fuzzy.key;
+    }else{
+      // Don't double-map
+      const alreadyMapped=Object.values(s.mapping);
+      if(!alreadyMapped.includes(match.key)){
+        s.mapping[String(i)]=match.key;
+      }
+    }
+  });
+  
+  renderBulkImportModal();
+}
+
+function handleFileUpload(event){
+  const file=event.target.files[0];
+  if(!file)return;
+  const ext=file.name.split('.').pop().toLowerCase();
+  
+  if(ext==='csv'||ext==='tsv'||ext==='txt'){
+    const reader=new FileReader();
+    reader.onload=e=>{
+      importState._fileData=e.target.result;
+      importState.tab='upload';
+      parseImportData();
+    };
+    reader.readAsText(file);
+  }else if(ext==='xlsx'||ext==='xls'){
+    const reader=new FileReader();
+    reader.onload=async e=>{
+      try{
+        // Use SheetJS to parse Excel
+        if(typeof XLSX==='undefined'){
+          // Load SheetJS dynamically
+          await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+        }
+        const data=new Uint8Array(e.target.result);
+        const workbook=XLSX.read(data,{type:'array'});
+        const firstSheet=workbook.Sheets[workbook.SheetNames[0]];
+        const csv=XLSX.utils.sheet_to_csv(firstSheet);
+        importState._fileData=csv;
+        importState.tab='upload';
+        parseImportData();
+      }catch(err){
+        showToast('Error reading Excel file: '+err.message,'error');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }else{
+    showToast('Please upload a .xlsx, .csv, or .tsv file.','error');
+  }
+}
+
+function loadScript(src){
+  return new Promise((resolve,reject)=>{
+    const s=document.createElement('script');
+    s.src=src;s.onload=resolve;s.onerror=reject;
+    document.head.appendChild(s);
+  });
+}
+
+function buildPreview(){
+  const s=importState;
+  const mapped=s.mapping;
+  const mappedKeys=Object.entries(mapped).filter(([k,v])=>v);
+  
+  if(mappedKeys.length===0){showToast('Please map at least one column.','error');return;}
+  if(!Object.values(mapped).includes('itemName')){showToast('Please map the Item Name column — it\\'s required.','error');return;}
+  
+  s.parsed=s.rawData.map(row=>{
+    const obj={};
+    mappedKeys.forEach(([colIdx,fieldKey])=>{
+      let val=row[parseInt(colIdx)]||'';
+      // Clean up currency values
+      const field=IMPORT_FIELDS.find(f=>f.key===fieldKey);
+      if(field?.num){
+        val=val.replace(/[$,\s]/g,'');
+        if(val&&isNaN(parseFloat(val)))val='';
+      }
+      obj[fieldKey]=val;
+    });
+    return obj;
+  }).filter(row=>row.itemName||row.supplier||row.itemCostNet); // Filter out completely empty rows
+  
+  if(s.parsed.length===0){showToast('No valid data rows found after mapping.','error');return;}
+  
+  renderBulkImportModal();
+}
+
+async function executeBulkImport(){
+  const s=importState;
+  if(s.importing)return;
+  s.importing=true;
+  s.progress=0;
+  renderBulkImportModal();
+  
+  const results={total:s.parsed.length,success:0,failed:0,errors:[]};
+  
+  for(let i=0;i<s.parsed.length;i++){
+    try{
+      const row=s.parsed[i];
+      const fields={
+        Title:row.itemName||'Untitled Import',
+        ProjectNameLookupId:currentProject?.id,
+        SubmissionStatus:'Draft',
+        SubmittedBy:userName,
+        ModifiedByRole:role,
+      };
+      
+      // Map each field
+      IMPORT_FIELDS.forEach(f=>{
+        if(row[f.key]!==undefined&&row[f.key]!==''){
+          if(f.num){
+            const num=parseFloat(row[f.key]);
+            if(!isNaN(num))fields[f.spField]=num;
+          }else{
+            fields[f.spField]=row[f.key];
+          }
+        }
+      });
+      
+      // Calculate setup sell from setup cost if present
+      if(fields.InitialSetupCharge){
+        fields.SetupSell=Math.round(fields.InitialSetupCharge/0.8*100)/100;
+      }
+      
+      await saveProduct(fields,null);
+      results.success++;
+    }catch(err){
+      results.failed++;
+      results.errors.push({row:i+1,msg:err.message?.substring(0,80)||'Unknown error'});
+    }
+    s.progress=((i+1)/s.parsed.length)*100;
+    if(i%3===0)renderBulkImportModal(); // Update progress every 3 items
+  }
+  
+  s.importing=false;
+  s.results=results;
+  
+  // Reload products
+  if(currentProject)await loadProducts(currentProject.id);
+  
+  renderBulkImportModal();
+}
+
+async function finishBulkImport(){
+  closeBulkImport();
+  render();
+}
+
 function render(){
   const app=document.getElementById('app');
   if(appView==="login")return renderLogin(app);
@@ -1011,7 +1463,10 @@ function renderProjectDetail(app){
 
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
         <div><div class="dash-title" style="font-size:16px">Products</div></div>
-        <button class="btn-save" onclick="startNewProduct()">+ New Product</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn-save" style="background:#1a5276" onclick="openBulkImport()">📥 Bulk Import</button>
+          <button class="btn-save" onclick="startNewProduct()">+ New Product</button>
+        </div>
       </div>
       <div class="product-list">
         ${products.length===0?'<div style="text-align:center;padding:40px;color:#7f8c8d">No products yet. Click "+ New Product" to add the first one.</div>':''}
@@ -1385,17 +1840,26 @@ function renderForm(app){
 // INIT
 // ============================================================
 initMsal();
-// Check if already logged in
-const accounts=msalInstance.getAllAccounts();
-if(accounts.length){
-  userName=accounts[0].name||accounts[0].username;
-  (async()=>{
+// Wait for redirect promise first, then check existing sessions
+msalInstance.handleRedirectPromise().then(async resp=>{
+  if(resp){
+    userName=resp.account.name||resp.account.username;
+    try{
+      await getToken();await initSharePoint();
+      appView="dashboard";await loadProjects();render();
+    }catch(e){console.error(e);showToast("Logged in but failed to load data: "+e.message,"error");render();}
+    return;
+  }
+  // No redirect response — check existing session
+  const accounts=msalInstance.getAllAccounts();
+  if(accounts.length){
+    userName=accounts[0].name||accounts[0].username;
     try{
       await getToken();await initSharePoint();
       appView="dashboard";await loadProjects();render();
     }catch(e){console.error(e);render();}
-  })();
-}else{render();}
+  }else{render();}
+}).catch(e=>{console.error("Redirect error:",e);render();});
 </script>
 </body>
 </html>
