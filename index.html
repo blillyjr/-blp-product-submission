@@ -251,31 +251,13 @@ function initMsal(){
   });
 }
 async function login(){
+  // Use redirect-based login to avoid popup/COOP issues across all browsers
   try{
-    let resp;
-    try{
-      resp=await msalInstance.loginPopup({scopes:CONFIG.scopes});
-    }catch(popupErr){
-      // If popup blocked or fails, fall back to redirect
-      console.warn("Popup failed, trying redirect:",popupErr);
-      if(popupErr.errorCode==="popup_window_error"||popupErr.errorCode==="empty_window_error"||popupErr.errorCode==="monitor_window_timeout"){
-        msalInstance.loginRedirect({scopes:CONFIG.scopes});
-        return;
-      }
-      throw popupErr;
-    }
-    userName=resp.account.name||resp.account.username;
-    await getToken();
-    await initSharePoint();
-    appView="dashboard";
-    await loadProjects();
-    render();
+    await msalInstance.loginRedirect({scopes:CONFIG.scopes});
   }catch(e){
-    console.error("Login error:",e);
+    console.error("Login redirect error:",e);
     let msg="Login failed. ";
-    if(e.errorCode==="user_cancelled")msg="Login was cancelled.";
-    else if(e.errorCode==="consent_required")msg="Admin consent required. Ask Bob to grant consent in Azure portal.";
-    else if(e.errorCode==="interaction_in_progress")msg="A login is already in progress. Refresh the page and try again.";
+    if(e.errorCode==="interaction_in_progress")msg="A login is already in progress. Refresh the page and try again.";
     else if(e.errorMessage)msg+=e.errorMessage.split(".")[0]+".";
     else msg+="Please try again.";
     showToast(msg,"error");
@@ -288,8 +270,8 @@ async function getToken(){
     const resp=await msalInstance.acquireTokenSilent({scopes:CONFIG.scopes,account:accounts[0]});
     accessToken=resp.accessToken;
   }catch(e){
-    const resp=await msalInstance.acquireTokenPopup({scopes:CONFIG.scopes});
-    accessToken=resp.accessToken;
+    // If silent fails, redirect for new token
+    await msalInstance.acquireTokenRedirect({scopes:CONFIG.scopes});
   }
 }
 async function graphGet(url){
