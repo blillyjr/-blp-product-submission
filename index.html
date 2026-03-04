@@ -1242,7 +1242,7 @@ function buildPreview(){
   const mappedKeys=Object.entries(mapped).filter(([k,v])=>v);
   
   if(mappedKeys.length===0){showToast('Please map at least one column.','error');return;}
-  if(!Object.values(mapped).includes('itemName')){showToast('Please map the Item Name column — it\\'s required.','error');return;}
+  if(!Object.values(mapped).includes('itemName')){showToast("Please map the Item Name column. It is required.","error");return;}
   
   s.parsed=s.rawData.map(row=>{
     const obj={};
