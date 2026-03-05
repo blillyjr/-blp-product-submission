@@ -6,6 +6,11 @@
 <title>BLP Product Submission</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js"></script>
+<script>
+if(typeof msal==='undefined'){
+  document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-authentication-library-for-js/2.38.0/msal-browser.min.js"><\/script>');
+}
+</script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{min-height:100vh;background:linear-gradient(135deg,#f5f7fa 0%,#e8ecf1 100%);font-family:'DM Sans',sans-serif;color:#2c3e50}
@@ -1809,39 +1814,55 @@ function renderForm(app){
 
   else if(stepId==="files"){
     const saved=!!currentProduct?.id;
-    html+=crd("Product Files","Upload images, mockups, art files, and spec sheets for this product.",
-      `${!saved?'<div style="background:#fef9e7;border:1px solid #f9e79f;border-radius:8px;padding:12px;margin-bottom:12px;font-size:12px;color:#b7950b;font-weight:600">⚠ Save this product first before uploading files. Click "Save Draft" below, then return to this step.</div>':''}
-      <div class="file-drop-zone${saved?'':' disabled'}" id="fileDropZone" onclick="${saved?'document.getElementById(\\'fileInput\\').click()':''}"
-        ondragover="event.preventDefault();${saved?'this.classList.add(\\'dragover\\')':''}"
-        ondragleave="this.classList.remove('dragover')"
-        ondrop="event.preventDefault();this.classList.remove('dragover');${saved?'handleFileDrop(event)':''}">
-        <div class="file-drop-icon">${saved?'📁':'🔒'}</div>
-        <div class="file-drop-text">${saved?'Drop files here or click to browse':'Save product first to enable uploads'}</div>
-        <div class="file-drop-sub">${saved?'Images, PDFs, AI files, mockups — up to 4MB each':''}</div>
-      </div>
-      <input type="file" id="fileInput" multiple style="display:none" onchange="handleFileSelect(event)" accept="image/*,.pdf,.ai,.eps,.psd,.doc,.docx,.xls,.xlsx,.svg,.zip">
-      ${filesLoading?'<div style="text-align:center;padding:20px"><div class="spinner"></div></div>':''}
-      ${!filesLoading&&productFiles.length>0?`
-        <div style="margin-top:12px;font-size:12px;font-weight:600;color:#1a5276">${productFiles.length} file${productFiles.length>1?'s':''} uploaded</div>
-        <div class="file-list">
-          ${productFiles.map(f=>{
-            const isImg=['jpg','jpeg','png','gif','webp','svg','bmp'].includes((f.name.split('.').pop()||'').toLowerCase());
-            return '<div class="file-item">'+
-              '<div class="file-item-left">'+
-                (isImg&&f.webUrl?'<img class="file-thumb" src="'+f.webUrl+'" onerror="this.style.display=\\'none\\'">':
-                '<div class="file-item-icon">'+getFileIcon(f.name)+'</div>')+
-                '<div><div class="file-item-name">'+f.name+'</div>'+
-                '<div class="file-item-meta">'+formatFileSize(f.size||0)+'</div></div>'+
-              '</div>'+
-              '<div class="file-item-actions">'+
-                (f.webUrl?'<a href="'+f.webUrl+'" target="_blank" class="file-btn">Open</a>':'')+
-                '<button class="file-btn delete" onclick="event.stopPropagation();deleteProductFile(\\''+f.id+'\\',\\''+f.name.replace(/'/g,"\\\\'")+'\\')">&times;</button>'+
-              '</div></div>';
-          }).join('')}
-        </div>
-      `:''}
-      ${!filesLoading&&saved&&productFiles.length===0?'<div style="text-align:center;padding:20px;color:#7f8c8d;font-size:12px">No files uploaded yet.</div>':''}
-    `);
+    let filesHtml='';
+    if(!saved){
+      filesHtml+='<div style="background:#fef9e7;border:1px solid #f9e79f;border-radius:8px;padding:12px;margin-bottom:12px;font-size:12px;color:#b7950b;font-weight:600">Save this product first before uploading files. Click Save Draft below, then return to this step.</div>';
+    }
+    filesHtml+='<div class="file-drop-zone'+(saved?'':' disabled')+'" id="fileDropZone">';
+    filesHtml+='<div class="file-drop-icon">'+(saved?'📁':'🔒')+'</div>';
+    filesHtml+='<div class="file-drop-text">'+(saved?'Drop files here or click to browse':'Save product first to enable uploads')+'</div>';
+    filesHtml+='<div class="file-drop-sub">'+(saved?'Images, PDFs, AI files, mockups, up to 4MB each':'')+'</div>';
+    filesHtml+='</div>';
+    filesHtml+='<input type="file" id="fileInput" multiple style="display:none" accept="image/*,.pdf,.ai,.eps,.psd,.doc,.docx,.xls,.xlsx,.svg,.zip">';
+    if(filesLoading){
+      filesHtml+='<div style="text-align:center;padding:20px"><div class="spinner"></div></div>';
+    }
+    if(!filesLoading&&productFiles.length>0){
+      filesHtml+='<div style="margin-top:12px;font-size:12px;font-weight:600;color:#1a5276">'+productFiles.length+' file'+(productFiles.length>1?'s':'')+' uploaded</div>';
+      filesHtml+='<div class="file-list">';
+      productFiles.forEach(function(f){
+        var ext=(f.name.split('.').pop()||'').toLowerCase();
+        var isImg=['jpg','jpeg','png','gif','webp','svg','bmp'].indexOf(ext)>=0;
+        filesHtml+='<div class="file-item"><div class="file-item-left">';
+        filesHtml+='<div class="file-item-icon">'+getFileIcon(f.name)+'</div>';
+        filesHtml+='<div><div class="file-item-name">'+f.name+'</div>';
+        filesHtml+='<div class="file-item-meta">'+formatFileSize(f.size||0)+'</div></div>';
+        filesHtml+='</div><div class="file-item-actions">';
+        if(f.webUrl)filesHtml+='<a href="'+f.webUrl+'" target="_blank" class="file-btn">Open</a>';
+        filesHtml+='<button class="file-btn delete" data-fileid="'+f.id+'" data-filename="'+f.name.replace(/"/g,'&quot;')+'">&times;</button>';
+        filesHtml+='</div></div>';
+      });
+      filesHtml+='</div>';
+    }
+    if(!filesLoading&&saved&&productFiles.length===0){
+      filesHtml+='<div style="text-align:center;padding:20px;color:#7f8c8d;font-size:12px">No files uploaded yet.</div>';
+    }
+    html+=crd("Product Files","Upload images, mockups, art files, and spec sheets for this product.",filesHtml);
+    // Attach event listeners after render
+    setTimeout(function(){
+      var dz=document.getElementById("fileDropZone");
+      var fi=document.getElementById("fileInput");
+      if(dz&&saved){
+        dz.onclick=function(){fi.click();};
+        dz.ondragover=function(e){e.preventDefault();dz.classList.add("dragover");};
+        dz.ondragleave=function(){dz.classList.remove("dragover");};
+        dz.ondrop=function(e){e.preventDefault();dz.classList.remove("dragover");handleFileDrop(e);};
+      }
+      if(fi){fi.onchange=function(e){handleFileSelect(e);};}
+      document.querySelectorAll(".file-btn.delete").forEach(function(btn){
+        btn.onclick=function(e){e.stopPropagation();deleteProductFile(btn.dataset.fileid,btn.dataset.filename);};
+      });
+    },50);
   }
 
   else if(stepId==="logistics"){
@@ -1966,6 +1987,9 @@ function renderForm(app){
 // ============================================================
 // INIT
 // ============================================================
+if(typeof msal==='undefined'){
+  document.getElementById('app').innerHTML='<div style="text-align:center;padding:60px;font-family:DM Sans,sans-serif"><h2 style="color:#e74c3c">Failed to load authentication library</h2><p style="color:#7f8c8d;margin-top:12px">The Microsoft authentication script could not be loaded. This can happen if:</p><ul style="text-align:left;max-width:400px;margin:16px auto;color:#7f8c8d;font-size:14px"><li>An ad blocker or privacy extension is blocking the script</li><li>Your network/firewall is restricting external scripts</li><li>The CDN is temporarily unavailable</li></ul><p style="margin-top:16px"><button onclick="location.reload()" style="padding:12px 32px;background:#1a5276;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer">Retry</button></p></div>';
+}else{
 initMsal();
 // Wait for redirect promise first, then check existing sessions
 msalInstance.handleRedirectPromise().then(async resp=>{
@@ -1987,6 +2011,7 @@ msalInstance.handleRedirectPromise().then(async resp=>{
     }catch(e){console.error(e);render();}
   }else{render();}
 }).catch(e=>{console.error("Redirect error:",e);render();});
+} // end msal check
 </script>
 </body>
 </html>
