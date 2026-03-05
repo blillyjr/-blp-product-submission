@@ -660,11 +660,11 @@ function isApparel(){return form.isApparelItem==="Yes";}
 function isInStock(){return form.stockStatus==="In Stock";}
 function getFreightPct(){return isSoftGoods()?0.01:0.10;}
 
-function setVal(key,val){
+function setVal(key,val,silent){
   if(role==="admin"&&form[key]!==undefined&&form[key]!==val)modified[key]=true;
   form[key]=val;
   if(key==="isApparelItem"&&isApparel()&&p(form.foldingPolybag)===0)form.foldingPolybag="0.50";
-  render();
+  if(!silent)render();
 }
 
 function compute(){
@@ -830,7 +830,7 @@ function computeProductCompleteness(prod){
 const ALL_SIZES=["XS","S","M","L","XL","2XL","3XL","4XL","5XL"];
 const BASE_SIZES=["XS","S","M","L","XL"];
 function toggleSize(sz){form.sizes[sz].enabled=!form.sizes[sz].enabled;if(!form.sizes[sz].enabled){form.sizes[sz].qty="";form.sizes[sz].upcharge="0";}render();}
-function setSizeField(sz,field,val){form.sizes[sz][field]=val;render();}
+function setSizeField(sz,field,val,silent){form.sizes[sz][field]=val;if(!silent)render();}
 function isUpsize(sz){return !BASE_SIZES.includes(sz);}
 function getEnabledSizes(){return ALL_SIZES.filter(sz=>form.sizes[sz].enabled);}
 function getSizeCost(sz){
@@ -960,7 +960,7 @@ function mkSel(id,opts,ph){
 }
 function mkIn(id,type,ph,ro){
   const v=form[id]||"";const cls=(modified[id]?"field-modified":"")+(ro?" readonly-field":"");
-  return `<input type="${type||'text'}" id="${id}" value="${v}" placeholder="${ph||''}" onchange="setVal('${id}',this.value)" oninput="setVal('${id}',this.value)" class="${cls}" ${ro?'readonly':''}>`;
+  return `<input type="${type||'text'}" id="${id}" value="${v}" placeholder="${ph||''}" onchange="setVal('${id}',this.value)" oninput="setVal('${id}',this.value,true)" class="${cls}" ${ro?'readonly':''}>`;
 }
 function mkTog(id,opts){
   const v=form[id];
@@ -1661,7 +1661,7 @@ function renderForm(app){
         ${fld("Is this an Apparel Item?",mkTog("isApparelItem",["Yes","No"]))}
       </div>
       ${isApparel()?fld("Apparel Size Range",mkIn("itemSizeApparel","text","e.g., XS-XL")):''}
-      ${fld("Item Description",'<textarea id="itemDescription" rows="3" placeholder="Product description..." onchange="setVal(\'itemDescription\',this.value)" oninput="setVal(\'itemDescription\',this.value)">'+(form.itemDescription||'')+'</textarea><button class="btn-ai" id="aiBtn" onclick="generateDescription()">✨ Generate with AI</button>',{badge:'<span class="ai-badge">AI</span>'})}`
+      ${fld("Item Description",'<textarea id="itemDescription" rows="3" placeholder="Product description..." onchange="setVal(\'itemDescription\',this.value)" oninput="setVal(\'itemDescription\',this.value,true)">'+(form.itemDescription||'')+'</textarea><button class="btn-ai" id="aiBtn" onclick="generateDescription()">✨ Generate with AI</button>',{badge:'<span class="ai-badge">AI</span>'})}`
     ,"sales")+crd("Compliance","",
       `<div class="row row-2">
         ${fld("Stock Status",mkTog("stockStatus",["In Stock","On Demand"]))}
@@ -1700,9 +1700,9 @@ function renderForm(app){
             <td><input type="checkbox" ${enabled?'checked':''} onchange="toggleSize('${sz}')"></td>
             <td class="size-label">${sz}</td>
             <td class="cost-val">${enabled?'$'+p(form.itemCostNet).toFixed(2):'-'}</td>
-            ${form.singlePriceAllSizes==="No"?`<td>${enabled&&isUp?'<input type="number" value="'+(s.upcharge||'')+'" placeholder="0" onchange="setSizeField(\''+sz+'\',\'upcharge\',this.value)" oninput="setSizeField(\''+sz+'\',\'upcharge\',this.value)" step="0.01">':enabled?'—':'-'}</td>
+            ${form.singlePriceAllSizes==="No"?`<td>${enabled&&isUp?'<input type="number" value="'+(s.upcharge||'')+'" placeholder="0" onchange="setSizeField(\''+sz+'\',\'upcharge\',this.value)" oninput="setSizeField(\''+sz+'\',\'upcharge\',this.value,true)" step="0.01">':enabled?'—':'-'}</td>
             <td class="cost-val">${enabled?'$'+cost.toFixed(2):'-'}</td>`:`<td class="cost-val">${enabled?'$'+cost.toFixed(2):'-'}</td>`}
-            <td>${enabled?'<input type="number" value="'+(s.qty||'')+'" placeholder="0" onchange="setSizeField(\''+sz+'\',\'qty\',this.value)" oninput="setSizeField(\''+sz+'\',\'qty\',this.value)" min="0">':'-'}</td>
+            <td>${enabled?'<input type="number" value="'+(s.qty||'')+'" placeholder="0" onchange="setSizeField(\''+sz+'\',\'qty\',this.value)" oninput="setSizeField(\''+sz+'\',\'qty\',this.value,true)" min="0">':'-'}</td>
             <td class="sell-val">${enabled&&sell>0?'$'+sell.toFixed(2):'-'}</td>
           </tr>`;
         }).join('')}
@@ -1876,7 +1876,7 @@ function renderForm(app){
         ${fld("Co-op #",mkIn("coopNum","text",""))}
       </div>
       ${fld("Product URL",mkIn("productURL","text","https://..."))}
-      ${fld("Notes",'<textarea id="notes" rows="3" onchange="setVal(\'notes\',this.value)" oninput="setVal(\'notes\',this.value)">'+(form.notes||'')+'</textarea>')}`);
+      ${fld("Notes",'<textarea id="notes" rows="3" onchange="setVal(\'notes\',this.value)" oninput="setVal(\'notes\',this.value,true)">'+(form.notes||'')+'</textarea>')}`);
   }
 
   else if(stepId==="programfields"){
