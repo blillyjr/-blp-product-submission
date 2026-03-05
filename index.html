@@ -343,7 +343,7 @@ function formToSPFields(){
     Supplier:form.supplier,
     ProductCategory:form.websiteCategory==="Other"?form.customCategory||"Other":form.websiteCategory,
     CustomCategory:form.customCategory,
-    IsApparelItem:form.isApparelItem,
+    IsApparelItem:form.isApparelItem==="Yes",
     VendorItemNum:form.vendorItemNum,
     ItemColor:form.itemColor,
     ItemSizeApparel:form.itemSizeApparel,
@@ -370,9 +370,7 @@ function formToSPFields(){
     ShirtSizeSticker:p(form.shirtSizeSticker)||null,
     InboundFreightMethod:form.inboundFreightMethod,
     InboundFreightTotal:p(form.inboundFreightTotal)||null,
-    OutboundFreightMethod:form.outboundFreightMethod,
-    IncludeOutboundFreight:form.includeOutboundFreight,
-    OutboundFreightTotal:p(form.outboundFreightTotal)||null,
+    IncludeInboundFreight:form.includeInboundFreight==="Yes",
     ShipsIn:form.shipsIn,
     MasterCartonCost:p(form.masterCartonCost)||null,
     CustomPackaging:form.customPackaging,
@@ -428,7 +426,7 @@ function spFieldsToForm(sp){
   form.supplier=sp.Supplier||"";
   form.websiteCategory=sp.ProductCategory||"";
   form.customCategory=sp.CustomCategory||"";
-  form.isApparelItem=sp.IsApparelItem||"No";
+  form.isApparelItem=sp.IsApparelItem===true?"Yes":"No";
   form.vendorItemNum=sp.VendorItemNum||"";
   form.itemColor=sp.ItemColor||"";
   form.itemSizeApparel=sp.ItemSizeApparel||"";
@@ -455,9 +453,7 @@ function spFieldsToForm(sp){
   form.shirtSizeSticker=sp.ShirtSizeSticker!=null?String(sp.ShirtSizeSticker):"0";
   form.inboundFreightMethod=sp.InboundFreightMethod||"Category Default";
   form.inboundFreightTotal=sp.InboundFreightTotal!=null?String(sp.InboundFreightTotal):"";
-  form.outboundFreightMethod=sp.OutboundFreightMethod||"Category Default";
-  form.includeOutboundFreight=sp.IncludeOutboundFreight||"No";
-  form.outboundFreightTotal=sp.OutboundFreightTotal!=null?String(sp.OutboundFreightTotal):"";
+  form.includeInboundFreight=sp.IncludeInboundFreight===true?"Yes":"No";
   form.shipsIn=sp.ShipsIn||"Individual Box";
   form.masterCartonCost=sp.MasterCartonCost!=null?String(sp.MasterCartonCost):"1.00";
   form.customPackaging=sp.CustomPackaging||"No";
@@ -541,8 +537,7 @@ function getDefaults(){
     itemCostNet:"",runCharge:"0",runChargeAddlLocation:"0",
     initialSetupCharge:"0",repeatSetup:"0",
     foldingPolybag:"0",shirtSizeSticker:"0",
-    inboundFreightMethod:"Category Default",inboundFreightTotal:"",
-    outboundFreightMethod:"Category Default",outboundFreightTotal:"",includeOutboundFreight:"No",
+    inboundFreightMethod:"Category Default",inboundFreightTotal:"",includeInboundFreight:"No",
     soldAs:"Each",bundleSource:"N/A",bundleFeePerPack:"0",qtyPerPack:"1",
     productURL:"",coopNum:"",standardLeadTime:"",is24HrAvailable:"No",
     lowParLevel:"",notes:"",
@@ -591,8 +586,8 @@ function compute(){
   const freightPct=getFreightPct();
   let ibf=0,obf=0;
   if(isInStock()){
-    ibf=form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct;
-    obf=form.includeOutboundFreight==="Yes"?(form.outboundFreightMethod==="Manual Entry"&&p(form.outboundFreightTotal)>0?(fq>0?p(form.outboundFreightTotal)/fq:0):ic*freightPct):0;
+    ibf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct):0;
+    obf=0;
   }
   const pp=md>0?(tn+ibf+obf)/md:0,
     rf=isInStock()?0.16/qp:0,pf=isInStock()?(pp<=9.99?.15:pp<=24.99?.30:.45)/qp:0,
@@ -669,7 +664,7 @@ const ADMIN_REQUIRED=[
   {key:"freightDone",label:"Freight Reviewed",check:()=>{
     if(!isInStock())return true;
     const c=compute();
-    return c.inboundFreight>0||(form.includeOutboundFreight==="Yes"&&c.outboundFreight>0)||form.includeOutboundFreight==="No";
+    return form.includeInboundFreight==="No"||c.inboundFreight>0;
   }},
 ];
 const PROGRAMS_REQUIRED=[
@@ -758,8 +753,8 @@ function computeForSize(sz){
   const freightPct=getFreightPct();
   let ibf=0,obf=0;
   if(isInStock()){
-    ibf=form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct;
-    obf=form.includeOutboundFreight==="Yes"?(form.outboundFreightMethod==="Manual Entry"&&p(form.outboundFreightTotal)>0?(fq>0?p(form.outboundFreightTotal)/fq:0):ic*freightPct):0;
+    ibf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct):0;
+    obf=0;
   }
   const pp=md>0?(tn+ibf+obf)/md:0,
     rf=isInStock()?0.16/qp:0,pf=isInStock()?(pp<=9.99?.15:pp<=24.99?.30:.45)/qp:0,
@@ -1664,15 +1659,8 @@ function renderForm(app){
       `Default: ${isSoftGoods()?"1%":"10%"} of item cost.`,
       `${fld("Item Weight",mkIn("itemWeight","text","e.g., 0.5 lb"),{owner:"admin"})}
       ${fld("Dimensions",mkIn("itemSizeDimensional","text","e.g., 3.5x8.5"),{owner:"admin",visible:!isApparel()})}
-      <div class="row row-2">
-        ${fld("Inbound Method",mkTog("inboundFreightMethod",["Category Default","Manual Entry"]))}
-        ${form.inboundFreightMethod==="Manual Entry"?fld("Inbound Total $",mkIn("inboundFreightTotal","number","")):''}
-      </div>
-      <div class="inbound-box"><div class="inbound-label">Inbound/pc: $${c.inboundFreight.toFixed(4)}</div></div>
-      <div style="margin-top:12px">
-        ${fld("Include Outbound Freight?",mkTog("includeOutboundFreight",["Yes","No"]),{owner:"admin"})}
-      </div>
-      ${form.includeOutboundFreight==="Yes"?'<div class="row row-2">'+fld("Outbound Method",mkTog("outboundFreightMethod",["Category Default","Manual Entry"]))+(form.outboundFreightMethod==="Manual Entry"?fld("Outbound Total $",mkIn("outboundFreightTotal","number","")):'')+ '</div><div class="inbound-box"><div class="inbound-label">Outbound/pc: $'+c.outboundFreight.toFixed(4)+'</div></div>':'<div style="font-size:11px;color:#7f8c8d;margin-top:4px;font-style:italic">Outbound freight is off. Admin can enable when applicable.</div>'}`
+      ${fld("Include Inbound Freight?",mkTog("includeInboundFreight",["Yes","No"]),{owner:"admin"})}
+      ${form.includeInboundFreight==="Yes"?'<div class="row row-2">'+fld("Inbound Method",mkTog("inboundFreightMethod",["Category Default","Manual Entry"]))+(form.inboundFreightMethod==="Manual Entry"?fld("Inbound Total $",mkIn("inboundFreightTotal","number","")):'')+ '</div><div class="inbound-box"><div class="inbound-label">Inbound/pc: $'+c.inboundFreight.toFixed(4)+'</div></div>':'<div style="font-size:11px;color:#7f8c8d;margin-top:4px;font-style:italic">Inbound freight is off. Admin can enable when applicable.</div>'}`
     ,"admin")+crd("Pricing with Freight","",
       `<div class="pricing-box"><div class="row row-3">
         <div><div class="pricing-label">Net</div><div class="pricing-value">$${c.totalNet.toFixed(2)}</div></div>
@@ -1691,7 +1679,7 @@ function renderForm(app){
         ${fld("Bundle Source",mkSel("bundleSource",["Manufacturer pack","BLP pack","N/A"]))}
         ${fld("Bundle Fee/Pack (net)",mkIn("bundleFeePerPack","number","0"))}
       </div>`:''}`
-    )+crd("Outbound Shipping","",
+    )+crd("Packaging & Shipping","",
       `${fld("Ships In",mkTog("shipsIn",["Shipping Envelope","Master Carton","Individual Box"]))}
       ${form.shipsIn==="Master Carton"?`
         <div class="inbound-box"><div class="inbound-label">Adds $${p(form.masterCartonCost).toFixed(2)}/unit to cost.</div></div>
@@ -1752,7 +1740,7 @@ function renderForm(app){
     chk(form.decorations.length>0&&!!form.decorations[0].method,"Decoration method");
     chk(p(form.itemCostNet)>0,"Item cost");chk(c.effectiveMargin>=35,"Margin ≥ 35% ("+c.effectiveMargin+"%)");
     chk(c.finalSell>0,"Sell > $0");chk(c.finalSell>=c.totalNet,"Sell ≥ net cost");
-    chk(!isInStock()||(c.inboundFreight>0||(form.includeOutboundFreight==="Yes"?c.outboundFreight>0:true)),"Freight (in-stock)");
+    chk(!isInStock()||form.includeInboundFreight==="No"||c.inboundFreight>0,"Freight (in-stock)");
     chk(!!form.itemWeight||!isInStock(),"Item weight");
     const ok=checks.every(c=>c.ok);
     html+=`<div class="${ok?'validation-card validation-ok':'validation-card'}">
@@ -1772,7 +1760,7 @@ function renderForm(app){
       <div><div class="pricing-label">Net</div><div class="pricing-value">$${c.totalNet.toFixed(2)}</div></div>
       <div><div class="pricing-label">Program</div><div class="pricing-value blue">$${c.programPrice.toFixed(2)}</div></div>
       <div><div class="pricing-label">Sell</div><div class="pricing-value green">$${c.finalSell.toFixed(2)}</div></div>
-    </div></div>`+rr("Item Cost","$"+p(form.itemCostNet).toFixed(2))+rr("Inbound","$"+c.inboundFreight.toFixed(4))+rr("Outbound","$"+c.outboundFreight.toFixed(4))
+    </div></div>`+rr("Item Cost","$"+p(form.itemCostNet).toFixed(2))+rr("Inbound Freight","$"+c.inboundFreight.toFixed(4))
       +rr("Ships In",form.shipsIn)+(c.marginWarning?'<div class="margin-warning"><span class="margin-warning-icon">⚠️</span><span class="margin-warning-text">Margin below 35%!</span></div>':''));
   }
 
