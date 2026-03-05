@@ -1031,6 +1031,36 @@ function backToProject(){appView="projectdetail";currentStep=0;render();}
 // ============================================================
 // MAIN RENDER
 // ============================================================
+function downloadBulkTemplate(){
+  const headers=[
+    "Item Name","Supplier","Product Category","Vendor Item #","Item Color",
+    "Item Description","Stock Status","Supplier Minimum","Website Minimum",
+    "1st Qty to Order","Item Cost (Net)","Run Charge","Run Charge Addl Location",
+    "Initial Setup Charge","Repeat Setup","Folding/Polybag","Size Sticker",
+    "Decoration Supplier","Decoration 1 Method","Decoration 1 Location",
+    "Decoration 1 Colors","Decoration 1 PMS Colors","Decoration 1 Setup Cost",
+    "Item Weight","Item Dimensions","Ships In","Lead Time","Product URL",
+    "BLP Website Item #","Website Description","Website Price","Low Par Level"
+  ];
+  const example=[
+    "Realtree 10oz Tumbler","Hit Promo","Drinkware","RT-TBL10","Forest Green",
+    "10oz double-wall vacuum insulated tumbler with Realtree camo accent","In Stock","72","1",
+    "150","4.50","0.75","0","50","0","0","0",
+    "Hit Promo","Screen Print","Front Center",
+    "2","PMS 349C, PMS White","50",
+    "0.5 lb","3.5 x 8.5","Individual Box","10","https://hitpromo.net/product/rt-tbl10",
+    "","","","5"
+  ];
+  const csv=headers.join(",")+"\n"+example.map(v=>v.includes(",")?'"'+v+'"':v).join(",")+"\n";
+  const blob=new Blob([csv],{type:"text/csv"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url;a.download="BLP_Bulk_Import_Template.csv";
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast("Template downloaded! Open in Excel, fill in your products, then paste or upload.");
+}
+
 function handleFileDrop(event){
   const files=event.dataTransfer?.files;
   if(files&&files.length>0)uploadMultipleFiles(files);
@@ -1109,6 +1139,7 @@ function renderBulkImportModal(){
         <div class="import-tabs">
           <button class="import-tab ${s.tab==='paste'?'active':''}" onclick="importState.tab='paste';renderBulkImportModal()">Paste from Excel</button>
           <button class="import-tab ${s.tab==='upload'?'active':''}" onclick="importState.tab='upload';renderBulkImportModal()">Upload File</button>
+          <button class="import-tab" onclick="downloadBulkTemplate()" style="margin-left:auto;background:#eafaf1;border-color:#27ae60;color:#27ae60">📥 Download Template</button>
         </div>
         ${s.tab==='paste'?`
           <p style="font-size:12px;color:#7f8c8d;margin-bottom:8px">Copy rows from Excel (with headers in the first row) and paste below. Tab-separated data is automatically detected.</p>
