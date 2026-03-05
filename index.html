@@ -170,6 +170,28 @@ textarea{resize:vertical}
 .product-row-comp{display:flex;align-items:center;gap:6px;min-width:120px}
 /* Bulk Import */
 .modal-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.5);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px}
+/* File Upload */
+.file-drop-zone{border:2px dashed #d5dbdb;border-radius:10px;padding:40px 20px;text-align:center;cursor:pointer;transition:all .2s;background:#fff}
+.file-drop-zone:hover,.file-drop-zone.dragover{border-color:#1a5276;background:#f0f7fc}
+.file-drop-icon{font-size:40px;margin-bottom:8px}
+.file-drop-text{font-size:14px;color:#2c3e50;font-weight:600}
+.file-drop-sub{font-size:11px;color:#7f8c8d;margin-top:4px}
+.file-list{margin-top:12px}
+.file-item{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:#fff;border:1px solid #e8ecef;border-radius:8px;margin-bottom:6px;transition:all .15s}
+.file-item:hover{border-color:#1a5276}
+.file-item-left{display:flex;align-items:center;gap:10px;flex:1;min-width:0}
+.file-item-icon{font-size:20px;flex-shrink:0}
+.file-item-name{font-size:13px;font-weight:600;color:#2c3e50;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.file-item-meta{font-size:10px;color:#7f8c8d}
+.file-item-actions{display:flex;gap:6px;flex-shrink:0}
+.file-btn{padding:4px 10px;border-radius:5px;font-size:11px;cursor:pointer;font-family:'DM Sans',sans-serif;border:1px solid #d5dbdb;background:#fff;color:#7f8c8d;transition:all .15s}
+.file-btn:hover{border-color:#1a5276;color:#1a5276}
+.file-btn.delete{color:#e74c3c;border-color:#f5b7b1}
+.file-btn.delete:hover{background:#fdedec}
+.file-thumb{width:48px;height:48px;border-radius:6px;object-fit:cover;border:1px solid #e8ecef;flex-shrink:0}
+.file-upload-progress{height:4px;background:#e8ecef;border-radius:2px;margin-top:4px;overflow:hidden}
+.file-upload-progress-fill{height:100%;background:#1a5276;border-radius:2px;transition:width .3s}
+.file-count-badge{display:inline-flex;align-items:center;gap:4px;background:#d6eaf8;color:#1a5276;font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px}
 .modal{background:#fff;border-radius:12px;max-width:900px;width:100%;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3)}
 .modal-header{display:flex;align-items:center;justify-content:space-between;padding:18px 24px;border-bottom:1px solid #e8ecef}
 .modal-title{font-size:18px;font-weight:700;color:#1a5276}
@@ -235,11 +257,12 @@ const DECO_METHODS=["Screen Print","Embroidery","Laser Engrave","Heat Transfer",
 // ============================================================
 // STATE
 // ============================================================
-let msalInstance=null,accessToken=null,userName="",siteId="",projectsListId="",productsListId="";
+let msalInstance=null,accessToken=null,userName="",siteId="",driveId="",projectsListId="",productsListId="";
 let appView="login"; // login, dashboard, newproject, projectdetail, form
 let projects=[],products=[],currentProject=null,currentProduct=null;
 let role="sales",currentStep=0,form={},modified={};
 let saving=false;
+let productFiles=[],filesLoading=false;
 
 // ============================================================
 // MSAL AUTH
@@ -291,6 +314,76 @@ async function graphPatch(url,body){
   const r=await fetch(`https://graph.microsoft.com/v1.0${url}`,{method:"PATCH",headers:{Authorization:`Bearer ${accessToken}`,"Content-Type":"application/json"},body:JSON.stringify(body)});
   if(!r.ok)throw new Error(`Graph PATCH ${r.status}: ${await r.text()}`);
   return r.json();
+}
+async function graphUpload(url,file){
+  await getToken();
+  const r=await fetch(`https://graph.microsoft.com/v1.0${url}`,{method:"PUT",headers:{Authorization:`Bearer ${accessToken}`,"Content-Type":file.type||"application/octet-stream"},body:file});
+  if(!r.ok)throw new Error(`Upload ${r.status}: ${await r.text()}`);
+  return r.json();
+}
+async function graphDelete(url){
+  await getToken();
+  const r=await fetch(`https://graph.microsoft.com/v1.0${url}`,{method:"DELETE",headers:{Authorization:`Bearer ${accessToken}`}});
+  if(!r.ok&&r.status!==204)throw new Error(`Delete ${r.status}: ${await r.text()}`);
+}
+
+// ============================================================
+// FILE MANAGEMENT
+// ============================================================
+function getProductFolderPath(){
+  const projName=(currentProject?.Title||"Project").replace(/[^a-zA-Z0-9 _-]/g,"").substring(0,50);
+  const prodName=(form.itemName||currentProduct?.Title||"Product").replace(/[^a-zA-Z0-9 _-]/g,"").substring(0,50);
+  const prodId=currentProduct?.id||"new";
+  return `ProductFiles/${projName}/${prodName}_${prodId}`;
+}
+async function uploadProductFile(file){
+  if(!currentProduct?.id){showToast("Save the product first before uploading files.","error");return;}
+  const folderPath=getProductFolderPath();
+  const fileName=file.name.replace(/[#%&{}\\<>*?/$!'":@+`|=]/g,"_");
+  try{
+    const result=await graphUpload(`/sites/${siteId}/drive/root:/${folderPath}/${fileName}:/content`,file);
+    showToast(`Uploaded ${fileName}`);
+    await loadProductFiles();
+    render();
+    return result;
+  }catch(e){showToast("Upload failed: "+e.message,"error");}
+}
+async function loadProductFiles(){
+  if(!currentProduct?.id){productFiles=[];return;}
+  const folderPath=getProductFolderPath();
+  filesLoading=true;
+  try{
+    const data=await graphGet(`/sites/${siteId}/drive/root:/${folderPath}:/children?$select=id,name,size,lastModifiedDateTime,webUrl,file&$top=100`);
+    productFiles=data.value||[];
+  }catch(e){
+    // Folder doesn't exist yet — that's fine
+    productFiles=[];
+  }
+  filesLoading=false;
+}
+async function deleteProductFile(fileId,fileName){
+  if(!confirm(`Delete "${fileName}"?`))return;
+  try{
+    await graphDelete(`/sites/${siteId}/drive/items/${fileId}`);
+    showToast(`Deleted ${fileName}`);
+    await loadProductFiles();
+    render();
+  }catch(e){showToast("Delete failed: "+e.message,"error");}
+}
+function formatFileSize(bytes){
+  if(bytes<1024)return bytes+" B";
+  if(bytes<1048576)return(bytes/1024).toFixed(1)+" KB";
+  return(bytes/1048576).toFixed(1)+" MB";
+}
+function getFileIcon(name){
+  const ext=(name.split('.').pop()||'').toLowerCase();
+  if(['jpg','jpeg','png','gif','webp','svg','bmp'].includes(ext))return '🖼️';
+  if(['pdf'].includes(ext))return '📄';
+  if(['ai','eps','psd'].includes(ext))return '🎨';
+  if(['doc','docx'].includes(ext))return '📝';
+  if(['xls','xlsx','csv'].includes(ext))return '📊';
+  if(['zip','rar','7z'].includes(ext))return '📦';
+  return '📎';
 }
 
 // ============================================================
@@ -611,21 +704,23 @@ function compute(){
 const STEPS_SALES=[
   {id:"program",label:"Program",icon:"⚙"},{id:"product",label:"Product",icon:"📦"},
   {id:"decoration",label:"Deco",icon:"🎨"},{id:"costs",label:"Costs",icon:"💰"},
-  {id:"packaging",label:"Packaging",icon:"📋"},{id:"logistics",label:"Logistics",icon:"🚚"},
-  {id:"review",label:"Review",icon:"✓"},
+  {id:"packaging",label:"Packaging",icon:"📋"},{id:"files",label:"Files",icon:"📁"},
+  {id:"logistics",label:"Logistics",icon:"🚚"},{id:"review",label:"Review",icon:"✓"},
 ];
 const STEPS_ADMIN=[
   {id:"program",label:"Program",icon:"⚙"},{id:"product",label:"Product",icon:"📦"},
   {id:"decoration",label:"Deco",icon:"🎨"},{id:"costs",label:"Costs",icon:"💰"},
   {id:"freight",label:"Freight",icon:"🚢"},{id:"packaging",label:"Packaging",icon:"📋"},
-  {id:"logistics",label:"Logistics",icon:"🚚"},{id:"review",label:"Review",icon:"✓"},
+  {id:"files",label:"Files",icon:"📁"},{id:"logistics",label:"Logistics",icon:"🚚"},
+  {id:"review",label:"Review",icon:"✓"},
 ];
 const STEPS_PROGRAMS=[
   {id:"program",label:"Program",icon:"⚙"},{id:"product",label:"Product",icon:"📦"},
   {id:"decoration",label:"Deco",icon:"🎨"},{id:"costs",label:"Costs",icon:"💰"},
   {id:"freight",label:"Freight",icon:"🚢"},{id:"packaging",label:"Packaging",icon:"📋"},
-  {id:"logistics",label:"Logistics",icon:"🚚"},{id:"programfields",label:"Pgm Fields",icon:"🏷"},
-  {id:"validation",label:"Validate",icon:"✅"},{id:"review",label:"Review",icon:"✓"},
+  {id:"files",label:"Files",icon:"📁"},{id:"logistics",label:"Logistics",icon:"🚚"},
+  {id:"programfields",label:"Pgm Fields",icon:"🏷"},{id:"validation",label:"Validate",icon:"✅"},
+  {id:"review",label:"Review",icon:"✓"},
 ];
 function getSteps(){return role==="programs"?STEPS_PROGRAMS:role==="admin"?STEPS_ADMIN:STEPS_SALES;}
 function setRole(r){role=r;currentStep=0;render();}
@@ -823,7 +918,7 @@ async function handleSave(){
     if(!currentProduct?.id){
       // Find the product we just created
       const found=products.find(p=>p.Title===form.itemName);
-      if(found)currentProduct=found;
+      if(found){currentProduct=found;loadProductFiles();}
     }
     saving=false;render();
   }catch(e){
@@ -904,13 +999,15 @@ function startNewProduct(){
     form.shippingUpchargeAmount=currentProject.ShipUpchargeAmount!=null?String(currentProject.ShipUpchargeAmount):"";
     form.clientSuppliedStock=currentProject.ClientSuppliedStock||"No";
   }
-  currentProduct=null;currentStep=0;modified={};
+  currentProduct=null;currentStep=0;modified={};productFiles=[];
   appView="form";render();
 }
 function openProduct(prod){
   currentProduct=prod;
   spFieldsToForm(prod);
   currentStep=0;modified={};
+  productFiles=[];
+  loadProductFiles(); // Load files in background
   appView="form";render();
 }
 function backToDashboard(){appView="dashboard";currentProject=null;products=[];render();}
@@ -919,6 +1016,22 @@ function backToProject(){appView="projectdetail";currentStep=0;render();}
 // ============================================================
 // MAIN RENDER
 // ============================================================
+function handleFileDrop(event){
+  const files=event.dataTransfer?.files;
+  if(files&&files.length>0)uploadMultipleFiles(files);
+}
+function handleFileSelect(event){
+  const files=event.target?.files;
+  if(files&&files.length>0)uploadMultipleFiles(files);
+  event.target.value=''; // Reset so same file can be selected again
+}
+async function uploadMultipleFiles(files){
+  for(const file of files){
+    if(file.size>4194304){showToast(`${file.name} is too large (max 4MB).`,"error");continue;}
+    await uploadProductFile(file);
+  }
+}
+
 // ============================================================
 // BULK IMPORT
 // ============================================================
@@ -1692,6 +1805,43 @@ function renderForm(app){
           ${fld("Setup Cost",mkIn("customPkgSetupCost","number","0"))}
           ${fld("Unit Cost",mkIn("customPkgUnitCost","number","0"))}
         </div>`:''}`);
+  }
+
+  else if(stepId==="files"){
+    const saved=!!currentProduct?.id;
+    html+=crd("Product Files","Upload images, mockups, art files, and spec sheets for this product.",
+      `${!saved?'<div style="background:#fef9e7;border:1px solid #f9e79f;border-radius:8px;padding:12px;margin-bottom:12px;font-size:12px;color:#b7950b;font-weight:600">⚠ Save this product first before uploading files. Click "Save Draft" below, then return to this step.</div>':''}
+      <div class="file-drop-zone${saved?'':' disabled'}" id="fileDropZone" onclick="${saved?'document.getElementById(\\'fileInput\\').click()':''}"
+        ondragover="event.preventDefault();${saved?'this.classList.add(\\'dragover\\')':''}"
+        ondragleave="this.classList.remove('dragover')"
+        ondrop="event.preventDefault();this.classList.remove('dragover');${saved?'handleFileDrop(event)':''}">
+        <div class="file-drop-icon">${saved?'📁':'🔒'}</div>
+        <div class="file-drop-text">${saved?'Drop files here or click to browse':'Save product first to enable uploads'}</div>
+        <div class="file-drop-sub">${saved?'Images, PDFs, AI files, mockups — up to 4MB each':''}</div>
+      </div>
+      <input type="file" id="fileInput" multiple style="display:none" onchange="handleFileSelect(event)" accept="image/*,.pdf,.ai,.eps,.psd,.doc,.docx,.xls,.xlsx,.svg,.zip">
+      ${filesLoading?'<div style="text-align:center;padding:20px"><div class="spinner"></div></div>':''}
+      ${!filesLoading&&productFiles.length>0?`
+        <div style="margin-top:12px;font-size:12px;font-weight:600;color:#1a5276">${productFiles.length} file${productFiles.length>1?'s':''} uploaded</div>
+        <div class="file-list">
+          ${productFiles.map(f=>{
+            const isImg=['jpg','jpeg','png','gif','webp','svg','bmp'].includes((f.name.split('.').pop()||'').toLowerCase());
+            return '<div class="file-item">'+
+              '<div class="file-item-left">'+
+                (isImg&&f.webUrl?'<img class="file-thumb" src="'+f.webUrl+'" onerror="this.style.display=\\'none\\'">':
+                '<div class="file-item-icon">'+getFileIcon(f.name)+'</div>')+
+                '<div><div class="file-item-name">'+f.name+'</div>'+
+                '<div class="file-item-meta">'+formatFileSize(f.size||0)+'</div></div>'+
+              '</div>'+
+              '<div class="file-item-actions">'+
+                (f.webUrl?'<a href="'+f.webUrl+'" target="_blank" class="file-btn">Open</a>':'')+
+                '<button class="file-btn delete" onclick="event.stopPropagation();deleteProductFile(\\''+f.id+'\\',\\''+f.name.replace(/'/g,"\\\\'")+'\\')">&times;</button>'+
+              '</div></div>';
+          }).join('')}
+        </div>
+      `:''}
+      ${!filesLoading&&saved&&productFiles.length===0?'<div style="text-align:center;padding:20px;color:#7f8c8d;font-size:12px">No files uploaded yet.</div>':''}
+    `);
   }
 
   else if(stepId==="logistics"){
