@@ -452,11 +452,11 @@ function formToSPFields(){
     OverseasDirect:form.isOverseasDirect,
     SupplierMinimum:p(form.supplierMinimum)||null,
     WebsiteMinimum:p(form.websiteMinimum)||null,
-    FirstQtytoOrder:p(form.firstQtyToOrder)||null,
+    FirstQuantitytoOrder:p(form.firstQtyToOrder)||null,
     ItemWeight:form.itemWeight,
     ItemSizeDimensional:form.itemSizeDimensional,
     SellinBundles:form.sellInBundles,
-    BundleQty:p(form.bundleQty)||null,
+    BundleQuantity:p(form.bundleQty)||null,
     DecorationSupplier:form.decorationSupplier,
     PMSCharge:p(form.pmsCharge)||null,
     ItemCostNet:p(form.itemCostNet)||null,
@@ -464,7 +464,7 @@ function formToSPFields(){
     RunChargeAddl:p(form.runChargeAddlLocation)||null,
     InitialSetupCharge:p(form.initialSetupCharge)||null,
     RepeatSetup:p(form.repeatSetup)||null,
-    FoldingPolybag:p(form.foldingPolybag)||null,
+    Folding_x002f_Polybag:p(form.foldingPolybag)||null,
     ShirtSizeSticker:p(form.shirtSizeSticker)||null,
     InboundFreightMethod:form.inboundFreightMethod,
     InboundFreightTotal:p(form.inboundFreightTotal)||null,
@@ -472,7 +472,7 @@ function formToSPFields(){
     ShipsIn:form.shipsIn,
     MasterCartonCost:p(form.masterCartonCost)||null,
     CustomPackaging:form.customPackaging,
-    CustomPkgType:form.customPackagingType,
+    CustomPackagingType:form.customPackagingType,
     CustomPkgSetupCost:p(form.customPkgSetupCost)||null,
     CustomPkgUnitCost:p(form.customPkgUnitCost)||null,
     SoldAs:form.soldAs,
@@ -482,12 +482,12 @@ function formToSPFields(){
     PMSSell:p(form.pmsSell)||null,
     FinalSellSB:p(form.finalSellSB)||null,
     ProductURL:form.productURL,
-    CoopNum:form.coopNum,
+    Co_x002d_opNum:form.coopNum,
     StandardLeadTime:form.standardLeadTime,
     Is24hrAvailable:form.is24HrAvailable,
-    LowParLevel:p(form.lowParLevel)||null,
+    LowParlevel:p(form.lowParLevel)||null,
     Notes:form.notes,
-    BLPWebsiteItemNum:form.blpWebsiteItemNum,
+    BLPWebsiteNum:form.blpWebsiteItemNum,
     WebsiteDescription:form.websiteDescription,
     CurrentWebsitePrice:p(form.currentWebsitePrice)||null,
     SBPriceEaches:p(form.sbPriceEaches)||null,
@@ -507,7 +507,7 @@ function formToSPFields(){
     const d=form.decorations[i]||{};
     const n=i+1;
     f[`Deco${n}Method`]=d.method||null;
-    f[`Deco${n}Location`]=d.location||null;
+    f[n===1?`Deco1location`:`Deco${n}Location`]=d.location||null;
     f[`Deco${n}Dimensions`]=d.dimensions||null;
     f[`Deco${n}Logo`]=d.logo||null;
     f[`Deco${n}Colors`]=d.colors||null;
@@ -535,11 +535,11 @@ function spFieldsToForm(sp){
   form.isOverseasDirect=sp.OverseasDirect||"No";
   form.supplierMinimum=sp.SupplierMinimum!=null?String(sp.SupplierMinimum):"";
   form.websiteMinimum=sp.WebsiteMinimum!=null?String(sp.WebsiteMinimum):"1";
-  form.firstQtyToOrder=sp.FirstQtytoOrder!=null?String(sp.FirstQtytoOrder):"";
+  form.firstQtyToOrder=sp.FirstQuantitytoOrder!=null?String(sp.FirstQuantitytoOrder):"";
   form.itemWeight=sp.ItemWeight||"";
   form.itemSizeDimensional=sp.ItemSizeDimensional||"";
   form.sellInBundles=sp.SellinBundles||"No";
-  form.bundleQty=sp.BundleQty!=null?String(sp.BundleQty):"";
+  form.bundleQty=sp.BundleQuantity!=null?String(sp.BundleQuantity):"";
   form.decorationSupplier=sp.DecorationSupplier||"";
   form.pmsCharge=sp.PMSCharge!=null?String(sp.PMSCharge):"0";
   form.itemCostNet=sp.ItemCostNet!=null?String(sp.ItemCostNet):"";
@@ -547,7 +547,7 @@ function spFieldsToForm(sp){
   form.runChargeAddlLocation=sp.RunChargeAddl!=null?String(sp.RunChargeAddl):"0";
   form.initialSetupCharge=sp.InitialSetupCharge!=null?String(sp.InitialSetupCharge):"0";
   form.repeatSetup=sp.RepeatSetup!=null?String(sp.RepeatSetup):"0";
-  form.foldingPolybag=sp.FoldingPolybag!=null?String(sp.FoldingPolybag):"0";
+  form.foldingPolybag=sp.Folding_x002f_Polybag!=null?String(sp.Folding_x002f_Polybag):"0";
   form.shirtSizeSticker=sp.ShirtSizeSticker!=null?String(sp.ShirtSizeSticker):"0";
   form.inboundFreightMethod=sp.InboundFreightMethod||"Category Default";
   form.inboundFreightTotal=sp.InboundFreightTotal!=null?String(sp.InboundFreightTotal):"";
@@ -555,7 +555,7 @@ function spFieldsToForm(sp){
   form.shipsIn=sp.ShipsIn||"Individual Box";
   form.masterCartonCost=sp.MasterCartonCost!=null?String(sp.MasterCartonCost):"1.00";
   form.customPackaging=sp.CustomPackaging||"No";
-  form.customPackagingType=sp.CustomPkgType||"";
+  form.customPackagingType=sp.CustomPackagingType||"";
   form.customPkgSetupCost=sp.CustomPkgSetupCost!=null?String(sp.CustomPkgSetupCost):"";
   form.customPkgUnitCost=sp.CustomPkgUnitCost!=null?String(sp.CustomPkgUnitCost):"";
   form.soldAs=sp.SoldAs||"Each";
@@ -565,12 +565,12 @@ function spFieldsToForm(sp){
   form.pmsSell=sp.PMSSell!=null?String(sp.PMSSell):"";
   form.finalSellSB=sp.FinalSellSB!=null?String(sp.FinalSellSB):"";
   form.productURL=sp.ProductURL||"";
-  form.coopNum=sp.CoopNum||"";
+  form.coopNum=sp.Co_x002d_opNum||"";
   form.standardLeadTime=sp.StandardLeadTime||"";
   form.is24HrAvailable=sp.Is24hrAvailable||"No";
-  form.lowParLevel=sp.LowParLevel!=null?String(sp.LowParLevel):"";
+  form.lowParLevel=sp.LowParlevel!=null?String(sp.LowParlevel):"";
   form.notes=sp.Notes||"";
-  form.blpWebsiteItemNum=sp.BLPWebsiteItemNum||"";
+  form.blpWebsiteItemNum=sp.BLPWebsiteNum||"";
   form.websiteDescription=sp.WebsiteDescription||"";
   form.currentWebsitePrice=sp.CurrentWebsitePrice!=null?String(sp.CurrentWebsitePrice):"";
   form.sbPriceEaches=sp.SBPriceEaches!=null?String(sp.SBPriceEaches):"";
@@ -592,7 +592,7 @@ function spFieldsToForm(sp){
     const m=sp[`Deco${i}Method`];
     if(m){
       form.decorations.push({
-        method:m||"",location:sp[`Deco${i}Location`]||"",
+        method:m||"",location:sp[i===1?`Deco1location`:`Deco${i}Location`]||"",
         dimensions:sp[`Deco${i}Dimensions`]||"",logo:sp[`Deco${i}Logo`]||"",
         colors:sp[`Deco${i}Colors`]||"",pms:sp[`Deco${i}PMS`]||"",
         setupSell:sp[`Deco${i}SetupSell`]!=null?String(sp[`Deco${i}SetupSell`]):"",
@@ -766,7 +766,7 @@ const SALES_REQUIRED=[
   {key:"dec0location",label:"Decoration Location",check:()=>form.decorations.length>0&&!!form.decorations[0].location},
   {key:"decorationSupplier",label:"Decoration Supplier"},
   {key:"standardLeadTime",label:"Lead Time"},
-  {key:"sizeQty",label:"Size Quantities",condition:()=>isApparel(),check:()=>getTotalSizeQty()>0},
+  {key:"sizeQty",label:"Size Quantities",condition:()=>isApparel()&&isInStock(),check:()=>getTotalSizeQty()>0},
 ];
 const ADMIN_REQUIRED=[
   {key:"itemWeight",label:"Item Weight"},
@@ -970,7 +970,7 @@ function mkSel(id,opts,ph){
 }
 function mkIn(id,type,ph,ro){
   const v=form[id]||"";const cls=(modified[id]?"field-modified":"")+(ro?" readonly-field":"");
-  return `<input type="${type||'text'}" id="${id}" value="${v}" placeholder="${ph||''}" onblur="setVal('${id}',this.value)" oninput="setVal('${id}',this.value,true)" class="${cls}" ${ro?'readonly':''}>`;
+  return `<input type="${type||'text'}" id="${id}" value="${v}" placeholder="${ph||''}" onblur="setVal('${id}',this.value)" oninput="setVal('${id}',this.value,true)" class="${cls}" ${type==='number'?'step="any"':''} ${ro?'readonly':''}>`;
 }
 function mkTog(id,opts){
   const v=form[id];
@@ -1062,7 +1062,7 @@ const IMPORT_FIELDS=[
   {key:'stockStatus',label:'Stock Status',spField:'StockStatus'},
   {key:'supplierMinimum',label:'Supplier Minimum',spField:'SupplierMinimum',num:true},
   {key:'websiteMinimum',label:'Website Minimum',spField:'WebsiteMinimum',num:true},
-  {key:'firstQtyToOrder',label:'1st Qty to Order',spField:'FirstQtytoOrder',num:true},
+  {key:'firstQtyToOrder',label:'1st Qty to Order',spField:'FirstQuantitytoOrder',num:true},
   {key:'itemCostNet',label:'Item Cost (Net)',spField:'ItemCostNet',num:true,required:true},
   {key:'runCharge',label:'Run Charge',spField:'RunCharge',num:true},
   {key:'runChargeAddlLocation',label:'Run Charge Addl Location',spField:'RunChargeAddl',num:true},
@@ -1072,7 +1072,7 @@ const IMPORT_FIELDS=[
   {key:'shirtSizeSticker',label:'Size Sticker',spField:'ShirtSizeSticker',num:true},
   {key:'decorationSupplier',label:'Decoration Supplier',spField:'DecorationSupplier'},
   {key:'deco1Method',label:'Decoration 1 Method',spField:'Deco1Method'},
-  {key:'deco1Location',label:'Decoration 1 Location',spField:'Deco1Location'},
+  {key:'deco1Location',label:'Decoration 1 Location',spField:'Deco1location'},
   {key:'deco1Colors',label:'Decoration 1 Colors',spField:'Deco1Colors'},
   {key:'deco1PMS',label:'Decoration 1 PMS Colors',spField:'Deco1PMS'},
   {key:'deco1SetupCost',label:'Decoration 1 Setup Cost',spField:'Deco1SetupCost',num:true},
@@ -1883,7 +1883,6 @@ function renderForm(app){
       </div>
       <div class="row row-2">
         ${fld("Low Par Level",mkIn("lowParLevel","number",""))}
-        ${fld("Co-op #",mkIn("coopNum","text",""))}
       </div>
       ${fld("Product URL",mkIn("productURL","text","https://..."))}
       ${fld("Notes",'<textarea id="notes" rows="3" onblur="setVal(\'notes\',this.value)" oninput="setVal(\'notes\',this.value,true)">'+(form.notes||'')+'</textarea>')}`);
