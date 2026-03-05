@@ -341,7 +341,9 @@ function formToSPFields(){
     Title:form.itemName||"Untitled",
     ProjectNameLookupId:currentProject?.id,
     Supplier:form.supplier,
-    ProductCategory:form.websiteCategory,
+    ProductCategory:form.websiteCategory==="Other"?form.customCategory||"Other":form.websiteCategory,
+    CustomCategory:form.customCategory,
+    IsApparelItem:form.isApparelItem,
     VendorItemNum:form.vendorItemNum,
     ItemColor:form.itemColor,
     ItemSizeApparel:form.itemSizeApparel,
@@ -369,6 +371,7 @@ function formToSPFields(){
     InboundFreightMethod:form.inboundFreightMethod,
     InboundFreightTotal:p(form.inboundFreightTotal)||null,
     OutboundFreightMethod:form.outboundFreightMethod,
+    IncludeOutboundFreight:form.includeOutboundFreight,
     OutboundFreightTotal:p(form.outboundFreightTotal)||null,
     ShipsIn:form.shipsIn,
     MasterCartonCost:p(form.masterCartonCost)||null,
@@ -424,6 +427,8 @@ function spFieldsToForm(sp){
   form.itemName=sp.Title||"";
   form.supplier=sp.Supplier||"";
   form.websiteCategory=sp.ProductCategory||"";
+  form.customCategory=sp.CustomCategory||"";
+  form.isApparelItem=sp.IsApparelItem||"No";
   form.vendorItemNum=sp.VendorItemNum||"";
   form.itemColor=sp.ItemColor||"";
   form.itemSizeApparel=sp.ItemSizeApparel||"";
@@ -451,6 +456,7 @@ function spFieldsToForm(sp){
   form.inboundFreightMethod=sp.InboundFreightMethod||"Category Default";
   form.inboundFreightTotal=sp.InboundFreightTotal!=null?String(sp.InboundFreightTotal):"";
   form.outboundFreightMethod=sp.OutboundFreightMethod||"Category Default";
+  form.includeOutboundFreight=sp.IncludeOutboundFreight||"No";
   form.outboundFreightTotal=sp.OutboundFreightTotal!=null?String(sp.OutboundFreightTotal):"";
   form.shipsIn=sp.ShipsIn||"Individual Box";
   form.masterCartonCost=sp.MasterCartonCost!=null?String(sp.MasterCartonCost):"1.00";
@@ -522,7 +528,7 @@ function getDefaults(){
     submissionType:"Standard Product",
     programOwnership:"Client Owned",marginFloor:"40",blpOwnershipUpcharge:"15",hasSpread:"No",spreadAmount:"",
     shippingUpchargeType:"None",shippingUpchargeAmount:"",clientSuppliedStock:"No",
-    supplier:"",websiteCategory:"",isChildrens:"No",needsProp65:"No",
+    supplier:"",websiteCategory:"",customCategory:"",isApparelItem:"No",isChildrens:"No",needsProp65:"No",
     isOverseasDirect:"No",stockStatus:"In Stock",vendorItemNum:"",itemColor:"",
     itemSizeApparel:"",itemName:"",itemDescription:"",supplierMinimum:"",websiteMinimum:"1",
     firstQtyToOrder:"",itemWeight:"",itemSizeDimensional:"",
@@ -536,7 +542,7 @@ function getDefaults(){
     initialSetupCharge:"0",repeatSetup:"0",
     foldingPolybag:"0",shirtSizeSticker:"0",
     inboundFreightMethod:"Category Default",inboundFreightTotal:"",
-    outboundFreightMethod:"Category Default",outboundFreightTotal:"",
+    outboundFreightMethod:"Category Default",outboundFreightTotal:"",includeOutboundFreight:"No",
     soldAs:"Each",bundleSource:"N/A",bundleFeePerPack:"0",qtyPerPack:"1",
     productURL:"",coopNum:"",standardLeadTime:"",is24HrAvailable:"No",
     lowParLevel:"",notes:"",
@@ -547,7 +553,7 @@ function getDefaults(){
     // Apparel size grid
     singlePriceAllSizes:"No",
     sizes:{
-      S:{enabled:true,upcharge:"0",qty:""},M:{enabled:true,upcharge:"0",qty:""},
+      "XS":{enabled:true,upcharge:"0",qty:""},S:{enabled:true,upcharge:"0",qty:""},M:{enabled:true,upcharge:"0",qty:""},
       L:{enabled:true,upcharge:"0",qty:""},XL:{enabled:true,upcharge:"0",qty:""},
       "2XL":{enabled:false,upcharge:"",qty:""},"3XL":{enabled:false,upcharge:"",qty:""},
       "4XL":{enabled:false,upcharge:"",qty:""},"5XL":{enabled:false,upcharge:"",qty:""},
@@ -556,15 +562,15 @@ function getDefaults(){
 }
 
 function p(v){return parseFloat(v)||0;}
-function isSoftGoods(){return SOFT_GOODS.includes(form.websiteCategory);}
-function isApparel(){return ["Apparel","Headwear","Socks"].includes(form.websiteCategory);}
+function isSoftGoods(){return SOFT_GOODS.includes(form.websiteCategory==="Other"?form.customCategory:form.websiteCategory);}
+function isApparel(){return form.isApparelItem==="Yes";}
 function isInStock(){return form.stockStatus==="In Stock";}
 function getFreightPct(){return isSoftGoods()?0.01:0.10;}
 
 function setVal(key,val){
   if(role==="admin"&&form[key]!==undefined&&form[key]!==val)modified[key]=true;
   form[key]=val;
-  if(key==="websiteCategory"&&isApparel()&&p(form.foldingPolybag)===0)form.foldingPolybag="0.50";
+  if(key==="isApparelItem"&&isApparel()&&p(form.foldingPolybag)===0)form.foldingPolybag="0.50";
   render();
 }
 
@@ -586,7 +592,7 @@ function compute(){
   let ibf=0,obf=0;
   if(isInStock()){
     ibf=form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct;
-    obf=form.outboundFreightMethod==="Manual Entry"&&p(form.outboundFreightTotal)>0?(fq>0?p(form.outboundFreightTotal)/fq:0):ic*freightPct;
+    obf=form.includeOutboundFreight==="Yes"?(form.outboundFreightMethod==="Manual Entry"&&p(form.outboundFreightTotal)>0?(fq>0?p(form.outboundFreightTotal)/fq:0):ic*freightPct):0;
   }
   const pp=md>0?(tn+ibf+obf)/md:0,
     rf=isInStock()?0.16/qp:0,pf=isInStock()?(pp<=9.99?.15:pp<=24.99?.30:.45)/qp:0,
@@ -663,7 +669,7 @@ const ADMIN_REQUIRED=[
   {key:"freightDone",label:"Freight Reviewed",check:()=>{
     if(!isInStock())return true;
     const c=compute();
-    return c.inboundFreight>0||c.outboundFreight>0;
+    return c.inboundFreight>0||(form.includeOutboundFreight==="Yes"&&c.outboundFreight>0)||form.includeOutboundFreight==="No";
   }},
 ];
 const PROGRAMS_REQUIRED=[
@@ -726,8 +732,8 @@ function computeProductCompleteness(prod){
 }
 
 // Size grid helpers
-const ALL_SIZES=["S","M","L","XL","2XL","3XL","4XL","5XL"];
-const BASE_SIZES=["S","M","L","XL"];
+const ALL_SIZES=["XS","S","M","L","XL","2XL","3XL","4XL","5XL"];
+const BASE_SIZES=["XS","S","M","L","XL"];
 function toggleSize(sz){form.sizes[sz].enabled=!form.sizes[sz].enabled;if(!form.sizes[sz].enabled){form.sizes[sz].qty="";form.sizes[sz].upcharge="0";}render();}
 function setSizeField(sz,field,val){form.sizes[sz][field]=val;render();}
 function isUpsize(sz){return !BASE_SIZES.includes(sz);}
@@ -753,7 +759,7 @@ function computeForSize(sz){
   let ibf=0,obf=0;
   if(isInStock()){
     ibf=form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct;
-    obf=form.outboundFreightMethod==="Manual Entry"&&p(form.outboundFreightTotal)>0?(fq>0?p(form.outboundFreightTotal)/fq:0):ic*freightPct;
+    obf=form.includeOutboundFreight==="Yes"?(form.outboundFreightMethod==="Manual Entry"&&p(form.outboundFreightTotal)>0?(fq>0?p(form.outboundFreightTotal)/fq:0):ic*freightPct):0;
   }
   const pp=md>0?(tn+ibf+obf)/md:0,
     rf=isInStock()?0.16/qp:0,pf=isInStock()?(pp<=9.99?.15:pp<=24.99?.30:.45)/qp:0,
@@ -1529,8 +1535,9 @@ function renderForm(app){
     html+=crd("Product Identity","",
       `<div class="row row-2">
         ${fld("Supplier",mkIn("supplier","text","e.g., SanMar"),{required:true})}
-        ${fld("Product Category",mkSel("websiteCategory",CATEGORIES),{required:true})}
+        ${fld("Product Category",mkSel("websiteCategory",[...CATEGORIES]),{required:true})}
       </div>
+      ${form.websiteCategory==="Other"?fld("Custom Category",mkIn("customCategory","text","Enter category name")):''}
       ${form.websiteCategory?`<div style="font-size:10px;color:${isSoftGoods()?'#27ae60':'#e67e22'};margin:-6px 0 10px;font-weight:600">${isSoftGoods()?'☑ Soft Goods — 1% freight':'☑ Hard Goods — 10% freight'}</div>`:''}
       <div class="row row-2">
         ${fld("Vendor Item #",mkIn("vendorItemNum","text","e.g., PC55"),{required:true})}
@@ -1538,8 +1545,9 @@ function renderForm(app){
       </div>
       <div class="row row-2">
         ${fld("Item Color",mkIn("itemColor","text",""))}
-        ${fld("Apparel Size Range",mkIn("itemSizeApparel","text","e.g., XS-XL"),{visible:isApparel()})}
+        ${fld("Is this an Apparel Item?",mkTog("isApparelItem",["Yes","No"]))}
       </div>
+      ${isApparel()?fld("Apparel Size Range",mkIn("itemSizeApparel","text","e.g., XS-XL")):''}
       ${fld("Item Description",'<textarea id="itemDescription" rows="3" placeholder="Product description..." onchange="setVal(\'itemDescription\',this.value)" oninput="setVal(\'itemDescription\',this.value)">'+(form.itemDescription||'')+'</textarea><button class="btn-ai" id="aiBtn" onclick="generateDescription()">✨ Generate with AI</button>',{badge:'<span class="ai-badge">AI</span>'})}`
     ,"sales")+crd("Compliance","",
       `<div class="row row-2">
@@ -1661,11 +1669,10 @@ function renderForm(app){
         ${form.inboundFreightMethod==="Manual Entry"?fld("Inbound Total $",mkIn("inboundFreightTotal","number","")):''}
       </div>
       <div class="inbound-box"><div class="inbound-label">Inbound/pc: $${c.inboundFreight.toFixed(4)}</div></div>
-      <div class="row row-2" style="margin-top:12px">
-        ${fld("Outbound Method",mkTog("outboundFreightMethod",["Category Default","Manual Entry"]))}
-        ${form.outboundFreightMethod==="Manual Entry"?fld("Outbound Total $",mkIn("outboundFreightTotal","number","")):''}
+      <div style="margin-top:12px">
+        ${fld("Include Outbound Freight?",mkTog("includeOutboundFreight",["Yes","No"]),{owner:"admin"})}
       </div>
-      <div class="inbound-box"><div class="inbound-label">Outbound/pc: $${c.outboundFreight.toFixed(4)}</div></div>`
+      ${form.includeOutboundFreight==="Yes"?'<div class="row row-2">'+fld("Outbound Method",mkTog("outboundFreightMethod",["Category Default","Manual Entry"]))+(form.outboundFreightMethod==="Manual Entry"?fld("Outbound Total $",mkIn("outboundFreightTotal","number","")):'')+ '</div><div class="inbound-box"><div class="inbound-label">Outbound/pc: $'+c.outboundFreight.toFixed(4)+'</div></div>':'<div style="font-size:11px;color:#7f8c8d;margin-top:4px;font-style:italic">Outbound freight is off. Admin can enable when applicable.</div>'}`
     ,"admin")+crd("Pricing with Freight","",
       `<div class="pricing-box"><div class="row row-3">
         <div><div class="pricing-label">Net</div><div class="pricing-value">$${c.totalNet.toFixed(2)}</div></div>
@@ -1745,7 +1752,7 @@ function renderForm(app){
     chk(form.decorations.length>0&&!!form.decorations[0].method,"Decoration method");
     chk(p(form.itemCostNet)>0,"Item cost");chk(c.effectiveMargin>=35,"Margin ≥ 35% ("+c.effectiveMargin+"%)");
     chk(c.finalSell>0,"Sell > $0");chk(c.finalSell>=c.totalNet,"Sell ≥ net cost");
-    chk(!isInStock()||(c.inboundFreight>0||c.outboundFreight>0),"Freight (in-stock)");
+    chk(!isInStock()||(c.inboundFreight>0||(form.includeOutboundFreight==="Yes"?c.outboundFreight>0:true)),"Freight (in-stock)");
     chk(!!form.itemWeight||!isInStock(),"Item weight");
     const ok=checks.every(c=>c.ok);
     html+=`<div class="${ok?'validation-card validation-ok':'validation-card'}">
