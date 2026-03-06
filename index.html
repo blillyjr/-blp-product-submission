@@ -500,7 +500,7 @@ function formToSPFields(){
   };
   // Apparel size data - store as JSON in Notes or a dedicated field
   if(isApparel()){
-    f._sizeData=JSON.stringify({sizes:form.sizes,singlePrice:form.singlePriceAllSizes});
+    f.SizeData=JSON.stringify({sizes:form.sizes,singlePrice:form.singlePriceAllSizes});
   }
   // Decoration fields (up to 4)
   for(let i=0;i<4;i++){
@@ -579,9 +579,9 @@ function spFieldsToForm(sp){
   form.omgCost=sp.OMGCost!=null?String(sp.OMGCost):"";
   form.submissionStatus=sp.SubmissionStatus||"Draft";
   // Load size data if present
-  if(sp._sizeData){
+  if(sp.SizeData){
     try{
-      const sd=JSON.parse(sp._sizeData);
+      const sd=JSON.parse(sp.SizeData);
       if(sd.sizes)form.sizes=sd.sizes;
       if(sd.singlePrice)form.singlePriceAllSizes=sd.singlePrice;
     }catch(e){}
