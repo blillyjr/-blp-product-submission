@@ -1726,7 +1726,9 @@ function renderForm(app){
         ${fld("Sell in Bundles?",mkTog("sellInBundles",["Yes","No"]))}
         ${fld("Qty Per Bundle",mkIn("bundleQty","number",""),{visible:form.sellInBundles==="Yes"})}
       </div>`
-    )+(isApparel()?crd("Apparel Size Grid","Select available sizes, enter upcharges for upsizes, and qty per size for 1st order.",
+    )+(isApparel()?crd("Item Cost","Enter the base item cost so the size grid can calculate pricing.",
+      `${fld("Item Cost (net)",mkIn("itemCostNet","number",""),{required:true})}`
+    ,"sales"):'')+(isApparel()?crd("Apparel Size Grid","Select available sizes, enter upcharges for upsizes, and qty per size for 1st order.",
       `<div class="single-price-toggle">
         <input type="checkbox" id="singlePriceToggle" ${form.singlePriceAllSizes==="Yes"?'checked':''} onchange="setVal('singlePriceAllSizes',this.checked?'Yes':'No')">
         <label for="singlePriceToggle" style="cursor:pointer">Single price for all sizes (no upsize upcharges)</label>
