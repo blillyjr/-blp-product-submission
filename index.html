@@ -611,6 +611,11 @@ function spFieldsToForm(sp){
     form.shippingUpchargeType=currentProject.ShipUpchargeType||"None";
     form.shippingUpchargeAmount=currentProject.ShipUpchargeAmount!=null?String(currentProject.ShipUpchargeAmount):"";
     form.clientSuppliedStock=currentProject.ClientSuppliedStock||"No";
+    form.merchantAccount=currentProject.MerchantAccount||"Client";
+    form.ccFeePct=currentProject.CCFeePct!=null?String(currentProject.CCFeePct):"3.2";
+    form.shipperAccount=currentProject.ShipperAccount||"BLP";
+    form.rollSetupIntoPrice=currentProject.RollSetupIntoPrice||"No";
+    form.roundTo=currentProject.RoundTo||"0.01";
   }
 }
 
@@ -622,6 +627,10 @@ function getDefaults(){
     submissionType:"Standard Product",
     programOwnership:"Client Owned",marginFloor:"40",blpOwnershipUpcharge:"15",hasSpread:"No",spreadAmount:"",
     shippingUpchargeType:"None",shippingUpchargeAmount:"",clientSuppliedStock:"No",
+    merchantAccount:"Client",ccFeePct:"3.2",
+    shipperAccount:"BLP",freightScenario:"Blank to Decorator",
+    rollSetupIntoPrice:"No",
+    roundTo:"0.01",
     supplier:"",websiteCategory:"",customCategory:"",isApparelItem:"No",isChildrens:"No",needsProp65:"No",
     isOverseasDirect:"No",stockStatus:"In Stock",vendorItemNum:"",itemColor:"",
     itemSizeApparel:"",itemName:"",itemDescription:"",supplierMinimum:"",websiteMinimum:"1",
@@ -664,6 +673,7 @@ function setVal(key,val,silent){
   if(role==="admin"&&form[key]!==undefined&&form[key]!==val)modified[key]=true;
   form[key]=val;
   if(key==="isApparelItem"&&isApparel()&&p(form.foldingPolybag)===0)form.foldingPolybag="0.50";
+  if(key==="ccFeePct"&&p(val)<2.9&&p(val)>0){form.ccFeePct="2.9";showToast("CC fee floor is 2.9%","error");}
   if(!silent){
     // Defer render to avoid losing focus during typing
     const active=document.activeElement;
@@ -682,7 +692,7 @@ function compute(){
   const ic=isApparel()&&getEnabledSizes().length>0?getBlendedCost():baseIc;
   const rc=p(form.runCharge),rca=p(form.runChargeAddlLocation),
     rs=p(form.repeatSetup),fq=isApparel()?getTotalSizeQty()||p(form.firstQtyToOrder)||1:p(form.firstQtyToOrder)||1,
-    rppc=fq>0?rs/fq:0,
+    rppc=form.rollSetupIntoPrice==="Yes"&&fq>0?rs/fq:0,
     fp=p(form.foldingPolybag),st=p(form.shirtSizeSticker),
     bf=p(form.bundleFeePerPack),qp=p(form.qtyPerPack)||1,bppc=qp>0?bf/qp:0,
     masterCarton=form.shipsIn==="Master Carton"?p(form.masterCartonCost):0,
@@ -693,24 +703,44 @@ function compute(){
     effectiveMf=baseMf+blpUp,md=(100-effectiveMf)/100;
   const freightPct=getFreightPct();
   let ibf=0,obf=0;
-  if(isInStock()){
-    ibf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct):0;
-    obf=0;
+  // Freight logic based on shipper account and scenario
+  if(form.shipperAccount==="Client"){
+    ibf=0;obf=0; // Client shipper = no freight
+  }else if(isInStock()){
+    if(form.freightScenario==="Pre-decorated at Supplier"){
+      // Only outbound (supplier to warehouse), no inbound
+      ibf=0;
+      obf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct):0;
+    }else{
+      // Blank to decorator: both inbound and outbound
+      ibf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct):0;
+      obf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct):0;
+    }
+  }else{
+    // On Demand: inbound only if blank to decorator
+    if(form.freightScenario==="Blank to Decorator"){
+      ibf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct):0;
+    }
+    obf=0; // Never outbound for on-demand
   }
   const pp=md>0?(tn+ibf+obf)/md:0,
     rf=isInStock()?0.16/qp:0,pf=isInStock()?(pp<=9.99?.15:pp<=24.99?.30:.45)/qp:0,
-    cc=pp*.045,spe=pp+rf+pf+cc,spp=spe*qp;
+    ccRate=form.merchantAccount==="BLP"?(p(form.ccFeePct)||3.2)/100:0,
+    cc=pp*ccRate,spe=pp+rf+pf+cc,spp=spe*qp;
   let su=0;
   if(form.shippingUpchargeType==="Flat $")su=p(form.shippingUpchargeAmount);
   else if(form.shippingUpchargeType==="% of Transaction")su=spe*(p(form.shippingUpchargeAmount)/100);
-  const fs=spe+su;
+  let fs=spe+su;
+  // Rounding
+  const roundVal=p(form.roundTo)||0.01;
+  if(roundVal>=1)fs=Math.ceil(fs/roundVal)*roundVal;
   const setupSellAuto=p(form.initialSetupCharge)/0.8;
   const pmsSellAuto=p(form.pmsCharge)/0.8;
   const marginWarning=effectiveMf<35;
   return{totalNet:tn,programPrice:pp,inboundFreight:ibf,outboundFreight:obf,receivingFee:rf,pickFee:pf,ccFee:cc,
     sellPriceEach:spe,sellPricePack:spp,repeatPerPc:rppc,bundlePerPc:bppc,finalSell:fs,
     marginFloor:baseMf,effectiveMargin:effectiveMf,blpUpcharge:blpUp,shippingUpcharge:su,
-    freightPct,setupSellAuto,pmsSellAuto,marginWarning,pmsCharge:p(form.pmsCharge)};
+    freightPct,setupSellAuto,pmsSellAuto,marginWarning,pmsCharge:p(form.pmsCharge),ccRate:ccRate*100};
 }
 
 // ============================================================
@@ -849,9 +879,9 @@ function getSizeCost(sz){
   return base+p(form.sizes[sz].upcharge);
 }
 function computeForSize(sz){
-  // Run the full pricing engine but with the size-specific item cost
   const ic=getSizeCost(sz),rc=p(form.runCharge),rca=p(form.runChargeAddlLocation),
-    rs=p(form.repeatSetup),fq=getTotalSizeQty()||1,rppc=fq>0?rs/fq:0,
+    rs=p(form.repeatSetup),fq=getTotalSizeQty()||1,
+    rppc=form.rollSetupIntoPrice==="Yes"&&fq>0?rs/fq:0,
     fp=p(form.foldingPolybag),st=p(form.shirtSizeSticker),
     bf=p(form.bundleFeePerPack),qp=p(form.qtyPerPack)||1,bppc=qp>0?bf/qp:0,
     masterCarton=form.shipsIn==="Master Carton"?p(form.masterCartonCost):0,
@@ -862,17 +892,33 @@ function computeForSize(sz){
     effectiveMf=baseMf+blpUp,md=(100-effectiveMf)/100;
   const freightPct=getFreightPct();
   let ibf=0,obf=0;
-  if(isInStock()){
-    ibf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct):0;
+  if(form.shipperAccount==="Client"){
+    ibf=0;obf=0;
+  }else if(isInStock()){
+    if(form.freightScenario==="Pre-decorated at Supplier"){
+      ibf=0;
+      obf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct):0;
+    }else{
+      ibf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct):0;
+      obf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct):0;
+    }
+  }else{
+    if(form.freightScenario==="Blank to Decorator"){
+      ibf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct):0;
+    }
     obf=0;
   }
   const pp=md>0?(tn+ibf+obf)/md:0,
     rf=isInStock()?0.16/qp:0,pf=isInStock()?(pp<=9.99?.15:pp<=24.99?.30:.45)/qp:0,
-    cc=pp*.045,spe=pp+rf+pf+cc;
+    ccRate=form.merchantAccount==="BLP"?(p(form.ccFeePct)||3.2)/100:0,
+    cc=pp*ccRate,spe=pp+rf+pf+cc;
   let su=0;
   if(form.shippingUpchargeType==="Flat $")su=p(form.shippingUpchargeAmount);
   else if(form.shippingUpchargeType==="% of Transaction")su=spe*(p(form.shippingUpchargeAmount)/100);
-  return{netCost:tn,programPrice:pp,sellEach:spe+su};
+  let fs=spe+su;
+  const roundVal=p(form.roundTo)||0.01;
+  if(roundVal>=1)fs=Math.ceil(fs/roundVal)*roundVal;
+  return{netCost:tn,programPrice:pp,sellEach:fs};
 }
 function getTotalSizeQty(){return getEnabledSizes().reduce((sum,sz)=>sum+p(form.sizes[sz].qty),0);}
 function getBlendedCost(){
@@ -1529,6 +1575,15 @@ function renderNewProject(app){
     <div class="new-project-form">
       <div class="card-title">Create New Project</div>
       <div class="card-sub">Set up the client program. These settings apply to all products in this project.</div>
+      <div class="field"><label class="field-label">Load Template <span style="font-weight:400;color:#7f8c8d">(optional)</span></label>
+        <select id="npTemplate" onchange="applyProjectTemplate(this.value)">
+          <option value="">— Start from scratch —</option>
+          <option value="standard_client">Standard Client Owned (40%, Client CC, BLP Shipper)</option>
+          <option value="standard_blp">Standard BLP Owned (40% + 15%, Client CC, BLP Shipper)</option>
+          <option value="atmos">Atmos Energy (35%, Client CC, BLP Shipper)</option>
+          <option value="dalg">DALG (40%, BLP Owned, 15% upcharge)</option>
+          <option value="on_demand">On Demand Program (40%, No freight, Client CC)</option>
+        </select></div>
       <div class="field"><label class="field-label">Client Name<span class="req">*</span></label><input type="text" id="npClient" placeholder="e.g., Atmos Energy"></div>
       <div class="field"><label class="field-label">Program Name<span class="req">*</span></label><input type="text" id="npProgram" placeholder="e.g., New Hire Program"></div>
       <div class="field"><label class="field-label">Sales Rep<span class="req">*</span></label><input type="text" id="npRep" value="${userName}" placeholder="Your name"></div>
@@ -1537,11 +1592,41 @@ function renderNewProject(app){
       <div class="field"><label class="field-label">Margin Floor %</label><input type="number" id="npMargin" value="40" placeholder="40"></div>
       <div class="field"><label class="field-label">BLP Ownership Upcharge %</label><input type="number" id="npUpcharge" value="15" placeholder="15">
         <div class="field-help">Only applies when BLP Owned is selected.</div></div>
+      <div class="field"><label class="field-label">Merchant Account</label>
+        <select id="npMerchant"><option value="Client" selected>Client Processes CC</option><option value="BLP">BLP Processes CC</option><option value="No CC">No CC Transactions</option></select></div>
+      <div class="field"><label class="field-label">CC Fee % <span style="font-weight:400;color:#7f8c8d">(only when BLP processes)</span></label><input type="number" id="npCCFee" value="3.2" step="0.1" min="2.9" placeholder="3.2"></div>
+      <div class="field"><label class="field-label">Shipper Account</label>
+        <select id="npShipper"><option value="BLP" selected>BLP Shipper</option><option value="Client">Client Shipper</option></select></div>
+      <div class="field"><label class="field-label">Roll Setup Into Unit Price?</label>
+        <select id="npRollSetup"><option value="No" selected>No — Charge Separately</option><option value="Yes">Yes — Include in Unit Price</option></select></div>
+      <div class="field"><label class="field-label">Round Sell Price To</label>
+        <select id="npRoundTo"><option value="0.01" selected>Nearest $0.01</option><option value="0.50">Nearest $0.50</option><option value="1.00">Nearest $1.00</option><option value="5.00">Nearest $5.00</option></select></div>
       <div style="text-align:right;margin-top:16px">
         <button class="btn-hdr" onclick="appView='dashboard';render()" style="color:#2c3e50;border-color:#d5dbdb;margin-right:8px">Cancel</button>
         <button class="btn-save" onclick="handleCreateProject()">Create Project</button>
       </div>
     </div>`;
+}
+
+function applyProjectTemplate(tmpl){
+  const templates={
+    standard_client:{ownership:"Client Owned",margin:40,upcharge:15,merchant:"Client",ccFee:3.2,shipper:"BLP",rollSetup:"No",roundTo:"0.01"},
+    standard_blp:{ownership:"BLP Owned",margin:40,upcharge:15,merchant:"Client",ccFee:3.2,shipper:"BLP",rollSetup:"No",roundTo:"0.01"},
+    atmos:{ownership:"Client Owned",margin:35,upcharge:15,merchant:"Client",ccFee:3.2,shipper:"BLP",rollSetup:"No",roundTo:"1.00"},
+    dalg:{ownership:"BLP Owned",margin:40,upcharge:15,merchant:"Client",ccFee:3.2,shipper:"BLP",rollSetup:"No",roundTo:"0.01"},
+    on_demand:{ownership:"Client Owned",margin:40,upcharge:15,merchant:"Client",ccFee:3.2,shipper:"Client",rollSetup:"No",roundTo:"0.01"},
+  };
+  const t=templates[tmpl];
+  if(!t)return;
+  document.getElementById('npOwnership').value=t.ownership;
+  document.getElementById('npMargin').value=t.margin;
+  document.getElementById('npUpcharge').value=t.upcharge;
+  document.getElementById('npMerchant').value=t.merchant;
+  document.getElementById('npCCFee').value=t.ccFee;
+  document.getElementById('npShipper').value=t.shipper;
+  document.getElementById('npRollSetup').value=t.rollSetup;
+  document.getElementById('npRoundTo').value=t.roundTo;
+  showToast("Template applied! Adjust settings as needed.");
 }
 
 async function handleCreateProject(){
@@ -1557,6 +1642,11 @@ async function handleCreateProject(){
       ProgramOwnership:document.getElementById('npOwnership').value,
       MarginFloor:parseFloat(document.getElementById('npMargin').value)||40,
       BLPUpchargePct:parseFloat(document.getElementById('npUpcharge').value)||15,
+      MerchantAccount:document.getElementById('npMerchant').value,
+      CCFeePct:parseFloat(document.getElementById('npCCFee').value)||3.2,
+      ShipperAccount:document.getElementById('npShipper').value,
+      RollSetupIntoPrice:document.getElementById('npRollSetup').value,
+      RoundTo:document.getElementById('npRoundTo').value,
       Status:"Active",
     });
     showToast("Project created!");
@@ -1674,8 +1764,22 @@ function renderForm(app){
         <div></div></div>`:''}
       <div class="row row-2">${fld("Margin Floor %",mkIn("marginFloor","number","40"))}<div></div></div>
       ${(p(form.marginFloor)+(form.programOwnership==="BLP Owned"?p(form.blpOwnershipUpcharge):0))<35?'<div class="margin-warning"><span class="margin-warning-icon">⚠️</span><span class="margin-warning-text">Effective margin below 35% — requires approval.</span></div>':''}`
+    )+crd("Merchant & Shipping Accounts","",
+      `<div class="row row-2">
+        ${fld("Merchant Account",mkTog("merchantAccount",["Client","BLP","No CC"]))}
+        ${form.merchantAccount==="BLP"?fld("CC Fee %",mkIn("ccFeePct","number","3.2"),{help:"Floor: 2.9%. Default: 3.2% (covers $0.30/txn)."}):''} 
+      </div>
+      <div class="row row-2">
+        ${fld("Shipper Account",mkTog("shipperAccount",["BLP","Client"]))}
+        ${form.shipperAccount==="BLP"?fld("Freight Scenario",mkTog("freightScenario",["Blank to Decorator","Pre-decorated at Supplier"])):''} 
+      </div>
+      ${form.shipperAccount==="Client"?'<div style="font-size:11px;color:#7f8c8d;margin-top:4px;font-style:italic">Client shipper — no freight rolled into pricing.</div>':''}`
     )+crd("Pricing Modifiers","",
       `<div class="row row-2">
+        ${fld("Roll Setup Into Unit Price?",mkTog("rollSetupIntoPrice",["Yes","No"]),{help:form.rollSetupIntoPrice==="No"?"Setup charged separately on invoice.":"Setup divided across 1st order qty."})}
+        ${fld("Round Sell Price To",mkTog("roundTo",["0.01","0.50","1.00","5.00"]))}
+      </div>
+      <div class="row row-2">
         ${fld("Customer Spread",mkTog("hasSpread",["Yes","No"]))}
         ${fld("Spread Amount",mkIn("spreadAmount","text","e.g., $2.00"),{visible:form.hasSpread==="Yes"})}
       </div>
@@ -1816,12 +1920,17 @@ function renderForm(app){
 
   else if(stepId==="freight"){
     const c=compute();
+    const shipperInfo=form.shipperAccount==="Client"?
+      '<div style="background:#eafaf1;border:1px solid #a9dfbf;border-radius:8px;padding:12px;margin-bottom:12px;font-size:12px;color:#1e8449;font-weight:600">Client shipper — no freight rolled into pricing.</div>':
+      '<div style="font-size:11px;color:#7f8c8d;margin-bottom:8px">BLP Shipper — '+form.freightScenario+(isInStock()?' (In Stock)':' (On Demand)')+'</div>';
     html+=crd("Freight"+(isSoftGoods()?" — Soft Goods":"— Hard Goods"),
       `Default: ${isSoftGoods()?"1%":"10%"} of item cost.`,
-      `${fld("Item Weight",mkIn("itemWeight","text","e.g., 0.5 lb"),{owner:"admin"})}
+      `${shipperInfo}
+      ${fld("Item Weight",mkIn("itemWeight","text","e.g., 0.5 lb"),{owner:"admin"})}
       ${fld("Dimensions",mkIn("itemSizeDimensional","text","e.g., 3.5x8.5"),{owner:"admin",visible:!isApparel()})}
-      ${fld("Include Inbound Freight?",mkTog("includeInboundFreight",["Yes","No"]),{owner:"admin"})}
-      ${form.includeInboundFreight==="Yes"?'<div class="row row-2">'+fld("Inbound Method",mkTog("inboundFreightMethod",["Category Default","Manual Entry"]))+(form.inboundFreightMethod==="Manual Entry"?fld("Inbound Total $",mkIn("inboundFreightTotal","number","")):'')+ '</div><div class="inbound-box"><div class="inbound-label">Inbound/pc: $'+c.inboundFreight.toFixed(4)+'</div></div>':'<div style="font-size:11px;color:#7f8c8d;margin-top:4px;font-style:italic">Inbound freight is off. Admin can enable when applicable.</div>'}`
+      ${form.shipperAccount==="BLP"?fld("Include Freight?",mkTog("includeInboundFreight",["Yes","No"]),{owner:"admin"}):''}
+      ${form.shipperAccount==="BLP"&&form.includeInboundFreight==="Yes"?'<div class="row row-2">'+fld("Freight Method",mkTog("inboundFreightMethod",["Category Default","Manual Entry"]))+(form.inboundFreightMethod==="Manual Entry"?fld("Freight Total $",mkIn("inboundFreightTotal","number","")):'')+ '</div><div class="inbound-box"><div class="inbound-label">Inbound/pc: $'+c.inboundFreight.toFixed(4)+(c.outboundFreight>0?' | Outbound/pc: $'+c.outboundFreight.toFixed(4):'')+'</div></div>':''}
+      ${form.shipperAccount==="BLP"&&form.includeInboundFreight!=="Yes"?'<div style="font-size:11px;color:#7f8c8d;margin-top:4px;font-style:italic">Freight is off. Admin can enable when applicable.</div>':''}`
     ,"admin")+crd("Pricing with Freight","",
       `<div class="pricing-box"><div class="row row-3">
         <div><div class="pricing-label">Net</div><div class="pricing-value">$${c.totalNet.toFixed(2)}</div></div>
@@ -1974,6 +2083,11 @@ function renderForm(app){
       <div><div class="pricing-label">Program</div><div class="pricing-value blue">$${c.programPrice.toFixed(2)}</div></div>
       <div><div class="pricing-label">Sell</div><div class="pricing-value green">$${c.finalSell.toFixed(2)}</div></div>
     </div></div>`+rr("Item Cost","$"+p(form.itemCostNet).toFixed(2))+rr("Inbound Freight","$"+c.inboundFreight.toFixed(4))
+      +(c.outboundFreight>0?rr("Outbound Freight","$"+c.outboundFreight.toFixed(4)):'')
+      +rr("CC Fee",form.merchantAccount==="BLP"?c.ccRate.toFixed(1)+"% ($"+c.ccFee.toFixed(2)+")":"N/A — Client processes")
+      +rr("Setup",form.rollSetupIntoPrice==="Yes"?"Rolled in ($"+c.repeatPerPc.toFixed(4)+"/unit)":"Charged separately")
+      +rr("Shipper",form.shipperAccount==="BLP"?"BLP — "+form.freightScenario:"Client shipper")
+      +rr("Rounding","Nearest $"+form.roundTo)
       +rr("Ships In",form.shipsIn)+(c.marginWarning?'<div class="margin-warning"><span class="margin-warning-icon">⚠️</span><span class="margin-warning-text">Margin below 35%!</span></div>':''));
   }
 
