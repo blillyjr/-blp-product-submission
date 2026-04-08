@@ -304,7 +304,7 @@ async function getToken(){
 }
 async function graphGet(url){
   await getToken();
-  const r=await fetch(`https://graph.microsoft.com/v1.0${url}`,{headers:{Authorization:`Bearer ${accessToken}`}});
+  const r=await fetch(`https://graph.microsoft.com/v1.0${url}`,{headers:{Authorization:`Bearer ${accessToken}`,"Prefer":"HonorNonIndexedQueriesWarningMayFailRandomly"}});
   if(!r.ok)throw new Error(`Graph GET ${r.status}: ${await r.text()}`);
   return r.json();
 }
