@@ -614,7 +614,7 @@ function spFieldsToForm(sp){
     form.merchantAccount=currentProject.MerchantAccount||"Client";
     form.ccFeePct=currentProject.CCFeePct!=null?String(currentProject.CCFeePct):"3.2";
     form.shipperAccount=currentProject.ShipperAccount||"BLP";
-    form.rollSetupIntoPrice=currentProject.RollSetupIntoPrice||"No";
+    form.rollSetupIntoPrice=currentProject.RollSetUpIntoPrice||"No";
     form.roundTo=currentProject.RoundTo||"0.01";
   }
 }
@@ -1645,7 +1645,7 @@ async function handleCreateProject(){
       MerchantAccount:document.getElementById('npMerchant').value,
       CCFeePct:parseFloat(document.getElementById('npCCFee').value)||3.2,
       ShipperAccount:document.getElementById('npShipper').value,
-      RollSetupIntoPrice:document.getElementById('npRollSetup').value,
+      RollSetUpIntoPrice:document.getElementById('npRollSetup').value,
       RoundTo:document.getElementById('npRoundTo').value,
       Status:"Active",
     });
