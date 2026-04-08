@@ -441,7 +441,7 @@ function formToSPFields(){
     Supplier:form.supplier,
     ProductCategory:form.websiteCategory==="Other"?form.customCategory||"Other":form.websiteCategory,
     CustomCategory:form.customCategory,
-    IsApparelItem:form.isApparelItem==="Yes",
+    IsApparelItem:form.isApparelItem,
     VendorItemNum:form.vendorItemNum,
     ItemColor:form.itemColor,
     ItemSizeApparel:form.itemSizeApparel,
@@ -468,7 +468,7 @@ function formToSPFields(){
     ShirtSizeSticker:p(form.shirtSizeSticker)||null,
     InboundFreightMethod:form.inboundFreightMethod,
     InboundFreightTotal:p(form.inboundFreightTotal)||null,
-    IncludeInboundFreight:form.includeInboundFreight==="Yes",
+    IncludeInboundFreight:form.includeInboundFreight,
     ShipsIn:form.shipsIn,
     MasterCartonCost:p(form.masterCartonCost)||null,
     CustomPackaging:form.customPackaging,
@@ -524,7 +524,7 @@ function spFieldsToForm(sp){
   form.supplier=sp.Supplier||"";
   form.websiteCategory=sp.ProductCategory||"";
   form.customCategory=sp.CustomCategory||"";
-  form.isApparelItem=sp.IsApparelItem===true?"Yes":"No";
+  form.isApparelItem=sp.IsApparelItem||"No";
   form.vendorItemNum=sp.VendorItemNum||"";
   form.itemColor=sp.ItemColor||"";
   form.itemSizeApparel=sp.ItemSizeApparel||"";
@@ -551,7 +551,7 @@ function spFieldsToForm(sp){
   form.shirtSizeSticker=sp.ShirtSizeSticker!=null?String(sp.ShirtSizeSticker):"0";
   form.inboundFreightMethod=sp.InboundFreightMethod||"Category Default";
   form.inboundFreightTotal=sp.InboundFreightTotal!=null?String(sp.InboundFreightTotal):"";
-  form.includeInboundFreight=sp.IncludeInboundFreight===true?"Yes":"No";
+  form.includeInboundFreight=sp.IncludeInboundFreight||"No";
   form.shipsIn=sp.ShipsIn||"Individual Box";
   form.masterCartonCost=sp.MasterCartonCost!=null?String(sp.MasterCartonCost):"1.00";
   form.customPackaging=sp.CustomPackaging||"No";
