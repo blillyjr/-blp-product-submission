@@ -655,10 +655,10 @@ function getDefaults(){
     // Apparel size grid
     singlePriceAllSizes:"No",
     sizes:{
-      "XS":{enabled:true,upcharge:"0",qty:""},S:{enabled:true,upcharge:"0",qty:""},M:{enabled:true,upcharge:"0",qty:""},
-      L:{enabled:true,upcharge:"0",qty:""},XL:{enabled:true,upcharge:"0",qty:""},
-      "2XL":{enabled:false,upcharge:"",qty:""},"3XL":{enabled:false,upcharge:"",qty:""},
-      "4XL":{enabled:false,upcharge:"",qty:""},"5XL":{enabled:false,upcharge:"",qty:""},
+      "XS":{enabled:true,upcharge:"0",qty:"",par:""},S:{enabled:true,upcharge:"0",qty:"",par:""},M:{enabled:true,upcharge:"0",qty:"",par:""},
+      L:{enabled:true,upcharge:"0",qty:"",par:""},XL:{enabled:true,upcharge:"0",qty:"",par:""},
+      "2XL":{enabled:false,upcharge:"",qty:"",par:""},"3XL":{enabled:false,upcharge:"",qty:"",par:""},
+      "4XL":{enabled:false,upcharge:"",qty:"",par:""},"5XL":{enabled:false,upcharge:"",qty:"",par:""},
     },
   };
 }
@@ -799,6 +799,10 @@ const SALES_REQUIRED=[
   {key:"sizeQty",label:"Size Quantities",condition:()=>isApparel()&&isInStock(),check:()=>getTotalSizeQty()>0},
 ];
 const ADMIN_REQUIRED=[
+  {key:"blpWebsiteItemNum",label:"BLP Website Item #"},
+  {key:"currentWebsitePrice",label:"Website Price",check:()=>p(form.currentWebsitePrice)>0||compute().finalSell>0},
+];
+const PROGRAMS_REQUIRED=[
   {key:"itemWeight",label:"Item Weight"},
   {key:"itemSizeDimensional",label:"Item Dimensions",condition:()=>!isApparel()},
   {key:"freightDone",label:"Freight Reviewed",check:()=>{
@@ -806,11 +810,7 @@ const ADMIN_REQUIRED=[
     const c=compute();
     return form.includeInboundFreight==="No"||c.inboundFreight>0;
   }},
-];
-const PROGRAMS_REQUIRED=[
-  {key:"blpWebsiteItemNum",label:"BLP Website Item #"},
   {key:"websiteDescription",label:"Website Description",check:()=>!!(form.websiteDescription||form.itemDescription)},
-  {key:"currentWebsitePrice",label:"Website Price",check:()=>p(form.currentWebsitePrice)>0||compute().finalSell>0},
   {key:"standardLeadTime",label:"Lead Time"},
   {key:"lowParLevel",label:"Low Par Level",check:()=>p(form.lowParLevel)>0},
 ];
@@ -998,11 +998,85 @@ async function handleSaveAndNew(){
     blpOwnershipUpcharge:form.blpOwnershipUpcharge,hasSpread:form.hasSpread,
     spreadAmount:form.spreadAmount,shippingUpchargeType:form.shippingUpchargeType,
     shippingUpchargeAmount:form.shippingUpchargeAmount,clientSuppliedStock:form.clientSuppliedStock,
+    merchantAccount:form.merchantAccount,ccFeePct:form.ccFeePct,
+    shipperAccount:form.shipperAccount,freightScenario:form.freightScenario,
+    rollSetupIntoPrice:form.rollSetupIntoPrice,roundTo:form.roundTo,
   };
   form=getDefaults();
   Object.assign(form,projectSettings);
   currentProduct=null;currentStep=1;modified={};render();
   showToast("Product saved! Starting new product.");
+}
+
+// Save & Add Color Variant - copies everything except color and PMS
+async function handleSaveColorVariant(){
+  await handleSave();
+  // Save all current form values
+  const prevForm=JSON.parse(JSON.stringify(form));
+  // Reset to defaults then restore everything except color-specific fields
+  form=getDefaults();
+  // Restore project settings
+  form.programOwnership=prevForm.programOwnership;
+  form.marginFloor=prevForm.marginFloor;
+  form.blpOwnershipUpcharge=prevForm.blpOwnershipUpcharge;
+  form.hasSpread=prevForm.hasSpread;
+  form.spreadAmount=prevForm.spreadAmount;
+  form.shippingUpchargeType=prevForm.shippingUpchargeType;
+  form.shippingUpchargeAmount=prevForm.shippingUpchargeAmount;
+  form.clientSuppliedStock=prevForm.clientSuppliedStock;
+  form.merchantAccount=prevForm.merchantAccount;
+  form.ccFeePct=prevForm.ccFeePct;
+  form.shipperAccount=prevForm.shipperAccount;
+  form.freightScenario=prevForm.freightScenario;
+  form.rollSetupIntoPrice=prevForm.rollSetupIntoPrice;
+  form.roundTo=prevForm.roundTo;
+  // Restore product details (everything except color and deco PMS)
+  form.supplier=prevForm.supplier;
+  form.websiteCategory=prevForm.websiteCategory;
+  form.customCategory=prevForm.customCategory;
+  form.isApparelItem=prevForm.isApparelItem;
+  form.vendorItemNum=prevForm.vendorItemNum;
+  form.itemName=prevForm.itemName;
+  form.itemDescription=prevForm.itemDescription;
+  form.stockStatus=prevForm.stockStatus;
+  form.isChildrens=prevForm.isChildrens;
+  form.needsProp65=prevForm.needsProp65;
+  form.isOverseasDirect=prevForm.isOverseasDirect;
+  form.supplierMinimum=prevForm.supplierMinimum;
+  form.websiteMinimum=prevForm.websiteMinimum;
+  form.firstQtyToOrder=prevForm.firstQtyToOrder;
+  form.sellInBundles=prevForm.sellInBundles;
+  form.bundleQty=prevForm.bundleQty;
+  form.itemCostNet=prevForm.itemCostNet;
+  form.runCharge=prevForm.runCharge;
+  form.runChargeAddlLocation=prevForm.runChargeAddlLocation;
+  form.initialSetupCharge=prevForm.initialSetupCharge;
+  form.repeatSetup=prevForm.repeatSetup;
+  form.foldingPolybag=prevForm.foldingPolybag;
+  form.shirtSizeSticker=prevForm.shirtSizeSticker;
+  form.decorationSupplier=prevForm.decorationSupplier;
+  form.shipsIn=prevForm.shipsIn;
+  form.masterCartonCost=prevForm.masterCartonCost;
+  form.customPackaging=prevForm.customPackaging;
+  form.customPackagingType=prevForm.customPackagingType;
+  form.customPkgSetupCost=prevForm.customPkgSetupCost;
+  form.customPkgUnitCost=prevForm.customPkgUnitCost;
+  form.standardLeadTime=prevForm.standardLeadTime;
+  form.singlePriceAllSizes=prevForm.singlePriceAllSizes;
+  form.sizes=JSON.parse(JSON.stringify(prevForm.sizes));
+  // Copy decoration methods and locations but clear PMS colors
+  form.decorations=prevForm.decorations.map(d=>({
+    method:d.method,location:d.location,dimensions:d.dimensions,
+    logo:d.logo,colors:"",pms:"",setupSell:d.setupSell,setupCost:d.setupCost
+  }));
+  // Clear color-specific fields
+  form.itemColor="";
+  form.itemSizeApparel=prevForm.itemSizeApparel;
+  // Clear quantities for the new color (they may order different qty per color)
+  Object.keys(form.sizes).forEach(sz=>{form.sizes[sz].qty="";});
+  form.firstQtyToOrder="";
+  currentProduct=null;currentStep=1;modified={};productFiles=[];render();
+  showToast("Product saved! Add the next color variant — method & location carried over, color & PMS cleared.");
 }
 
 // ============================================================
@@ -1581,7 +1655,9 @@ function renderNewProject(app){
           <option value="standard_client">Standard Client Owned (40%, Client CC, BLP Shipper)</option>
           <option value="standard_blp">Standard BLP Owned (40% + 15%, Client CC, BLP Shipper)</option>
           <option value="atmos">Atmos Energy (35%, Client CC, BLP Shipper)</option>
-          <option value="dalg">DALG (40%, BLP Owned, 15% upcharge)</option>
+          <option value="dalg">DALG (40%, Client Owned, Client CC, BLP Shipper)</option>
+          <option value="janiking">Jani-King (35%, BLP Owned, 15% upcharge)</option>
+          <option value="cro">CRO (35%, BLP Owned, 15% upcharge)</option>
           <option value="on_demand">On Demand Program (40%, No freight, Client CC)</option>
         </select></div>
       <div class="field"><label class="field-label">Client Name<span class="req">*</span></label><input type="text" id="npClient" placeholder="e.g., Atmos Energy"></div>
@@ -1613,7 +1689,9 @@ function applyProjectTemplate(tmpl){
     standard_client:{ownership:"Client Owned",margin:40,upcharge:15,merchant:"Client",ccFee:3.2,shipper:"BLP",rollSetup:"No",roundTo:"0.01"},
     standard_blp:{ownership:"BLP Owned",margin:40,upcharge:15,merchant:"Client",ccFee:3.2,shipper:"BLP",rollSetup:"No",roundTo:"0.01"},
     atmos:{ownership:"Client Owned",margin:35,upcharge:15,merchant:"Client",ccFee:3.2,shipper:"BLP",rollSetup:"No",roundTo:"1.00"},
-    dalg:{ownership:"BLP Owned",margin:40,upcharge:15,merchant:"Client",ccFee:3.2,shipper:"BLP",rollSetup:"No",roundTo:"0.01"},
+    dalg:{ownership:"Client Owned",margin:40,upcharge:0,merchant:"Client",ccFee:3.2,shipper:"BLP",rollSetup:"No",roundTo:"0.01"},
+    janiking:{ownership:"BLP Owned",margin:35,upcharge:15,merchant:"Client",ccFee:3.2,shipper:"BLP",rollSetup:"No",roundTo:"0.01"},
+    cro:{ownership:"BLP Owned",margin:35,upcharge:15,merchant:"Client",ccFee:3.2,shipper:"BLP",rollSetup:"No",roundTo:"0.01"},
     on_demand:{ownership:"Client Owned",margin:40,upcharge:15,merchant:"Client",ccFee:3.2,shipper:"Client",rollSetup:"No",roundTo:"0.01"},
   };
   const t=templates[tmpl];
@@ -1777,7 +1855,7 @@ function renderForm(app){
     )+crd("Pricing Modifiers","",
       `<div class="row row-2">
         ${fld("Roll Setup Into Unit Price?",mkTog("rollSetupIntoPrice",["Yes","No"]),{help:form.rollSetupIntoPrice==="No"?"Setup charged separately on invoice.":"Setup divided across 1st order qty."})}
-        ${fld("Round Sell Price To",mkTog("roundTo",["0.01","0.50","1.00","5.00"]))}
+        ${fld("Round Sell Price To",mkTog("roundTo",["0.01","0.50","1.00","5.00"]),{help:"$1.00 rounds to nearest whole dollar (e.g., $2.00)."})}
       </div>
       <div class="row row-2">
         ${fld("Customer Spread",mkTog("hasSpread",["Yes","No"]))}
@@ -1823,8 +1901,8 @@ function renderForm(app){
         ${isApparel()?'':''+fld("1st Qty to Order",mkIn("firstQtyToOrder","number",""))}
       </div>
       <div class="row row-2">
-        ${fld("Item Weight",role==="sales"?mkIn("itemWeight","text","Admin completes",true):mkIn("itemWeight","text",""),role==="sales"?{owner:"admin"}:{})}
-        ${fld("Dimensions",role==="sales"?mkIn("itemSizeDimensional","text","Admin completes",true):mkIn("itemSizeDimensional","text",""),Object.assign({visible:!isApparel()},role==="sales"?{owner:"admin"}:{}))}
+        ${fld("Item Weight",role==="sales"?mkIn("itemWeight","text","Programs completes",true):mkIn("itemWeight","text",""),role==="sales"?{owner:"programs"}:{})}
+        ${fld("Dimensions",role==="sales"?mkIn("itemSizeDimensional","text","Programs completes",true):mkIn("itemSizeDimensional","text",""),Object.assign({visible:!isApparel()},role==="sales"?{owner:"programs"}:{}))}
       </div>
       <div class="row row-2">
         ${fld("Sell in Bundles?",mkTog("sellInBundles",["Yes","No"]))}
@@ -1838,7 +1916,7 @@ function renderForm(app){
         <label for="singlePriceToggle" style="cursor:pointer">Single price for all sizes (no upsize upcharges)</label>
       </div>
       <table class="size-grid">
-        <tr><th></th><th>Size</th><th>Base Cost</th>${form.singlePriceAllSizes==="No"?'<th>Upcharge</th><th>Net Cost</th>':'<th>Net Cost</th>'}<th>1st Order Qty</th><th>Sell Each</th></tr>
+        <tr><th></th><th>Size</th><th>Base Cost</th>${form.singlePriceAllSizes==="No"?'<th>Upcharge</th><th>Net Cost</th>':'<th>Net Cost</th>'}<th>1st Order Qty</th><th>Par Level</th><th>Sell Each</th></tr>
         ${ALL_SIZES.map(sz=>{
           const s=form.sizes[sz],enabled=s.enabled,isUp=isUpsize(sz);
           const cost=getSizeCost(sz);
@@ -1850,6 +1928,7 @@ function renderForm(app){
             ${form.singlePriceAllSizes==="No"?`<td>${enabled&&isUp?'<input type="number" value="'+(s.upcharge||'')+'" placeholder="0" onblur="setSizeField(\''+sz+'\',\'upcharge\',this.value)" oninput="setSizeField(\''+sz+'\',\'upcharge\',this.value,true)" step="0.01">':enabled?'—':'-'}</td>
             <td class="cost-val">${enabled?'$'+cost.toFixed(2):'-'}</td>`:`<td class="cost-val">${enabled?'$'+cost.toFixed(2):'-'}</td>`}
             <td>${enabled?'<input type="number" value="'+(s.qty||'')+'" placeholder="0" onblur="setSizeField(\''+sz+'\',\'qty\',this.value)" oninput="setSizeField(\''+sz+'\',\'qty\',this.value,true)" min="0">':'-'}</td>
+            <td>${enabled?'<input type="number" value="'+(s.par||'')+'" placeholder="0" onblur="setSizeField(\''+sz+'\',\'par\',this.value)" oninput="setSizeField(\''+sz+'\',\'par\',this.value,true)" min="0">':'-'}</td>
             <td class="sell-val">${enabled&&sell>0?'$'+sell.toFixed(2):'-'}</td>
           </tr>`;
         }).join('')}
@@ -1926,12 +2005,12 @@ function renderForm(app){
     html+=crd("Freight"+(isSoftGoods()?" — Soft Goods":"— Hard Goods"),
       `Default: ${isSoftGoods()?"1%":"10%"} of item cost.`,
       `${shipperInfo}
-      ${fld("Item Weight",mkIn("itemWeight","text","e.g., 0.5 lb"),{owner:"admin"})}
-      ${fld("Dimensions",mkIn("itemSizeDimensional","text","e.g., 3.5x8.5"),{owner:"admin",visible:!isApparel()})}
-      ${form.shipperAccount==="BLP"?fld("Include Freight?",mkTog("includeInboundFreight",["Yes","No"]),{owner:"admin"}):''}
+      ${fld("Item Weight",mkIn("itemWeight","text","e.g., 0.5 lb"),{owner:"programs"})}
+      ${fld("Dimensions",mkIn("itemSizeDimensional","text","e.g., 3.5x8.5"),{owner:"programs",visible:!isApparel()})}
+      ${form.shipperAccount==="BLP"?fld("Include Freight?",mkTog("includeInboundFreight",["Yes","No"]),{owner:"programs"}):''}
       ${form.shipperAccount==="BLP"&&form.includeInboundFreight==="Yes"?'<div class="row row-2">'+fld("Freight Method",mkTog("inboundFreightMethod",["Category Default","Manual Entry"]))+(form.inboundFreightMethod==="Manual Entry"?fld("Freight Total $",mkIn("inboundFreightTotal","number","")):'')+ '</div><div class="inbound-box"><div class="inbound-label">Inbound/pc: $'+c.inboundFreight.toFixed(4)+(c.outboundFreight>0?' | Outbound/pc: $'+c.outboundFreight.toFixed(4):'')+'</div></div>':''}
-      ${form.shipperAccount==="BLP"&&form.includeInboundFreight!=="Yes"?'<div style="font-size:11px;color:#7f8c8d;margin-top:4px;font-style:italic">Freight is off. Admin can enable when applicable.</div>':''}`
-    ,"admin")+crd("Pricing with Freight","",
+      ${form.shipperAccount==="BLP"&&form.includeInboundFreight!=="Yes"?'<div style="font-size:11px;color:#7f8c8d;margin-top:4px;font-style:italic">Freight is off. Programs can enable when applicable.</div>':''}`
+    ,"programs")+crd("Pricing with Freight","",
       `<div class="pricing-box"><div class="row row-3">
         <div><div class="pricing-label">Net</div><div class="pricing-value">$${c.totalNet.toFixed(2)}</div></div>
         <div><div class="pricing-label">Program</div><div class="pricing-value blue">$${c.programPrice.toFixed(2)}</div></div>
@@ -2032,25 +2111,26 @@ function renderForm(app){
 
   else if(stepId==="programfields"){
     const c=compute();
-    html+=crd("Program-Assigned Fields","",
+    html+=crd("Admin-Assigned Fields","",
       `<div class="row row-2">
-        ${fld("BLP Website Item #",mkIn("blpWebsiteItemNum","text",""),{owner:"programs"})}
-        ${fld("Co-op #",mkIn("coopNum","text",""),{owner:"programs"})}
-      </div>
-      ${fld("Website Description",'<textarea id="websiteDescription" rows="3" onblur="setVal(\'websiteDescription\',this.value)">'+(form.websiteDescription||'')+'</textarea>',{owner:"programs"})}
+        ${fld("BLP Website Item #",mkIn("blpWebsiteItemNum","text",""),{owner:"admin"})}
+        ${fld("Co-op #",mkIn("coopNum","text",""),{owner:"admin"})}
+      </div>`
+    ,"admin")+crd("Website Description","",
+      `${fld("Website Description",'<textarea id="websiteDescription" rows="3" onblur="setVal(\'websiteDescription\',this.value)">'+(form.websiteDescription||'')+'</textarea>',{owner:"programs"})}
       ${form.itemDescription?'<div class="inbound-box"><div class="inbound-label">Sales Draft:</div><div style="font-size:11px;margin-top:3px">'+form.itemDescription+'</div></div>':''}`
     ,"programs")+crd("Pricing","",
       `<div class="row row-3">
-        ${fld("Website Price",mkIn("currentWebsitePrice","number",c.finalSell.toFixed(2)),{owner:"programs"})}
-        ${fld("SB Eaches",mkIn("sbPriceEaches","number",c.sellPriceEach.toFixed(2)),{owner:"programs"})}
-        ${fld("SB Packs",mkIn("sbPricePacks","number",c.sellPricePack.toFixed(2)),{owner:"programs"})}
+        ${fld("Website Price",mkIn("currentWebsitePrice","number",c.finalSell.toFixed(2)),{owner:"admin"})}
+        ${fld("SB Eaches",mkIn("sbPriceEaches","number",c.sellPriceEach.toFixed(2)),{owner:"admin"})}
+        ${fld("SB Packs",mkIn("sbPricePacks","number",c.sellPricePack.toFixed(2)),{owner:"admin"})}
       </div>
-      ${fld("Final Sell SB",mkIn("finalSellSB","number",c.finalSell.toFixed(2)),{owner:"programs"})}
+      ${fld("Final Sell SB",mkIn("finalSellSB","number",c.finalSell.toFixed(2)),{owner:"admin"})}
       <div class="row row-2">
-        ${fld("OMG Sell",mkIn("omgSell","number","0"),{owner:"programs"})}
-        ${fld("OMG Cost",mkIn("omgCost","number","0"),{owner:"programs"})}
+        ${fld("OMG Sell",mkIn("omgSell","number","0"),{owner:"admin"})}
+        ${fld("OMG Cost",mkIn("omgCost","number","0"),{owner:"admin"})}
       </div>`
-    ,"programs");
+    ,"admin");
   }
 
   else if(stepId==="validation"){
@@ -2133,6 +2213,7 @@ function renderForm(app){
       ${isLastStep&&role==='programs'?`<button class="btn-save" onclick="handleProgramsComplete()" style="background:#1e8449">Mark Complete</button>`:''}
       ${currentStep<steps.length-1?'<button class="btn-next" onclick="next()">Next →</button>':''}
       ${isLastStep?'<button class="btn-save" onclick="handleSaveAndNew()" style="background:#1a5276">Save & Add Another</button>':''}
+      ${isLastStep&&isApparel()?'<button class="btn-save" onclick="handleSaveColorVariant()" style="background:#8e44ad">Save & Add Color Variant</button>':''}
     </div>
   </div></div>`;
 
