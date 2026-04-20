@@ -253,7 +253,7 @@ const CONFIG={
   siteHost:"boblillypromo.sharepoint.com",
   sitePath:"/sites/BLPE-Commerce",
   redirectUri:window.location.origin+window.location.pathname,
-  scopes:["Sites.ReadWrite.All","User.Read"]
+  scopes:["Sites.ReadWrite.All","User.Read","Mail.Send"]
 };
 const SOFT_GOODS=["Apparel","Headwear","Socks","Table Covers","Towels","Bags"];
 const CATEGORIES=["Apparel","Drinkware","Bags","Headwear","Writing","Technology","Outdoor/Leisure","Awards/Recognition","Stationery","Health/Safety","Automotive","Food/Beverage","Housewares","Socks","Table Covers","Towels","Signage","Other"];
@@ -956,16 +956,69 @@ async function handleSubmitForReview(){
   form.submissionStatus="Submitted";
   await handleSave();
   showToast("Submitted for admin review!");
+  // Send email notification
+  sendStatusEmail("Submitted","New product submitted for admin review",
+    `<b>${form.itemName}</b> (${form.vendorItemNum}) has been submitted for review by ${userName}.<br><br>`+
+    `<b>Project:</b> ${currentProject?.Title||''} — ${currentProject?.ProgramName||''}<br>`+
+    `<b>Supplier:</b> ${form.supplier}<br>`+
+    `<b>Category:</b> ${form.websiteCategory}<br>`+
+    `<b>Item Cost:</b> $${p(form.itemCostNet).toFixed(2)}<br><br>`+
+    `<a href="https://blillyjr.github.io/-blp-product-submission/">Open App</a>`
+  );
 }
 async function handleAdminComplete(){
   form.submissionStatus="Programs Review";
   await handleSave();
   showToast("Marked for Programs review!");
+  sendStatusEmail("Programs Review","Product ready for Programs review",
+    `<b>${form.itemName}</b> (${form.vendorItemNum}) has been marked Admin Complete by ${userName} and is ready for Programs review.<br><br>`+
+    `<b>Project:</b> ${currentProject?.Title||''} — ${currentProject?.ProgramName||''}<br><br>`+
+    `<a href="https://blillyjr.github.io/-blp-product-submission/">Open App</a>`
+  );
 }
 async function handleProgramsComplete(){
   form.submissionStatus="Complete";
   await handleSave();
   showToast("Product marked complete!");
+  sendStatusEmail("Complete","Product marked complete",
+    `<b>${form.itemName}</b> (${form.vendorItemNum}) has been marked Complete by ${userName}.<br><br>`+
+    `<b>Project:</b> ${currentProject?.Title||''} — ${currentProject?.ProgramName||''}<br><br>`+
+    `<a href="https://blillyjr.github.io/-blp-product-submission/">Open App</a>`
+  );
+}
+
+// Email notification
+async function sendStatusEmail(status,subject,body){
+  try{
+    await getToken();
+    // Get all team members who should be notified
+    const recipients=[];
+    // Notify based on status change
+    if(status==="Submitted"){
+      // Notify admin (Jenn) and project owner
+      recipients.push("jfrakes@boblillypromo.com");
+    }else if(status==="Programs Review"){
+      // Notify programs (John)
+      recipients.push("jboyd@boblillypromo.com");
+    }else if(status==="Complete"){
+      // Notify sales rep and admin
+      recipients.push("jfrakes@boblillypromo.com");
+      if(currentProject?.SalesRep)recipients.push(currentProject.SalesRep.toLowerCase().replace(/\s+/g,'')+"@boblillypromo.com");
+    }
+    if(recipients.length===0)return;
+    const msg={
+      message:{
+        subject:"[BLP E-Com] "+subject,
+        body:{contentType:"HTML",content:body},
+        toRecipients:recipients.map(e=>({emailAddress:{address:e}})),
+      }
+    };
+    await fetch("https://graph.microsoft.com/v1.0/me/sendMail",{
+      method:"POST",
+      headers:{Authorization:`Bearer ${accessToken}`,"Content-Type":"application/json"},
+      body:JSON.stringify(msg)
+    });
+  }catch(e){console.error("Email notification failed:",e);}
 }
 
 // Save handler
@@ -1194,6 +1247,140 @@ async function uploadMultipleFiles(files){
   for(const file of files){
     if(file.size>4194304){showToast(`${file.name} is too large (max 4MB).`,"error");continue;}
     await uploadProductFile(file);
+  }
+}
+
+// ============================================================
+// EXCEL EXPORT
+// ============================================================
+async function exportProjectToExcel(){
+  if(products.length===0){showToast("No products to export.","error");return;}
+  try{
+    // Load SheetJS if not already loaded
+    if(typeof XLSX==='undefined'){
+      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+    }
+    const proj=currentProject;
+    // Build header row matching Master Price Sheet format
+    const headers=[
+      "Item Name","Supplier","Product Category","Vendor Item #","Item Color",
+      "Item Description","Stock Status","Is Apparel","Supplier Min","Website Min",
+      "1st Qty to Order","Item Cost (Net)","Run Charge","Run Charge Addl",
+      "Initial Setup","Repeat Setup","Folding/Polybag","Size Sticker",
+      "Decoration Supplier","Deco 1 Method","Deco 1 Location","Deco 1 Colors","Deco 1 PMS",
+      "Deco 1 Setup Cost","Deco 1 Setup Sell",
+      "Deco 2 Method","Deco 2 Location","Deco 2 Colors","Deco 2 PMS",
+      "Deco 2 Setup Cost","Deco 2 Setup Sell",
+      "Item Weight","Dimensions","Ships In",
+      "Inbound Freight Method","Include Inbound Freight",
+      "Merchant Account","CC Fee %","Shipper Account","Freight Scenario",
+      "Roll Setup Into Price","Program Ownership","Margin Floor %","BLP Upcharge %",
+      "Total Net","Program Price","Sell Price","Final Sell",
+      "Setup Charged Separately","Repeat Setup (per pc)",
+      "BLP Website Item #","Website Description","Website Price",
+      "SB Eaches","SB Packs","Final Sell SB","OMG Sell","OMG Cost",
+      "Co-op #","Lead Time","Low Par Level","Product URL",
+      "Submission Status","Submitted By",
+      "Size Data"
+    ];
+    const rows=[headers];
+    products.forEach(prod=>{
+      // Load form from product to compute pricing
+      const prevForm=JSON.parse(JSON.stringify(form));
+      const prevProduct=currentProduct;
+      currentProduct=prod;
+      spFieldsToForm(prod);
+      // Load project settings
+      if(proj){
+        form.programOwnership=proj.ProgramOwnership||"Client Owned";
+        form.marginFloor=proj.MarginFloor!=null?String(proj.MarginFloor):"40";
+        form.blpOwnershipUpcharge=proj.BLPUpchargePct!=null?String(proj.BLPUpchargePct):"15";
+        form.merchantAccount=proj.MerchantAccount||"Client";
+        form.ccFeePct=proj.CCFeePct!=null?String(proj.CCFeePct):"3.2";
+        form.shipperAccount=proj.ShipperAccount||"BLP";
+        form.rollSetupIntoPrice=proj.RollSetUpIntoPrice||"No";
+        form.roundTo=proj.RoundTo||"0.01";
+      }
+      const c=compute();
+      // Size data summary
+      let sizeStr="";
+      if(isApparel()){
+        const ALL=["XS","S","M","L","XL","2XL","3XL","4XL","5XL"];
+        sizeStr=ALL.filter(sz=>form.sizes[sz]?.enabled).map(sz=>{
+          const s=form.sizes[sz];
+          return sz+": Qty="+(s.qty||0)+" Par="+(s.par||0)+" Up=$"+(s.upcharge||0);
+        }).join("; ");
+      }
+      rows.push([
+        prod.Title||"",prod.Supplier||"",prod.ProductCategory||"",prod.VendorItemNum||"",
+        prod.ItemColor||"",prod.ItemDescription||"",prod.StockStatus||"",
+        form.isApparelItem||"No",
+        prod.SupplierMinimum||"",prod.WebsiteMinimum||"",
+        prod.FirstQuantitytoOrder||"",prod.ItemCostNet||"",
+        prod.RunCharge||0,prod.RunChargeAddl||0,
+        prod.InitialSetupCharge||0,prod.RepeatSetup||0,
+        prod["Folding_x002f_Polybag"]||0,prod.ShirtSizeSticker||0,
+        prod.DecorationSupplier||"",
+        prod.Deco1Method||"",prod.Deco1location||"",prod.Deco1Colors||"",prod.Deco1PMS||"",
+        prod.Deco1SetupCost||"",prod.Deco1SetupSell||"",
+        prod.Deco2Method||"",prod.Deco2Location||"",prod.Deco2Colors||"",prod.Deco2PMS||"",
+        prod.Deco2SetupCost||"",prod.Deco2SetupSell||"",
+        prod.ItemWeight||"",prod.ItemSizeDimensional||"",prod.ShipsIn||"",
+        prod.InboundFreightMethod||"",form.includeInboundFreight||"No",
+        form.merchantAccount||"Client",form.ccFeePct||"0",
+        form.shipperAccount||"BLP",form.freightScenario||"",
+        form.rollSetupIntoPrice||"No",
+        form.programOwnership||"",form.marginFloor||"",form.blpOwnershipUpcharge||"",
+        c.totalNet.toFixed(2),c.programPrice.toFixed(2),c.sellPriceEach.toFixed(2),c.finalSell.toFixed(2),
+        form.rollSetupIntoPrice==="No"?p(form.initialSetupCharge).toFixed(2):"Rolled in",
+        c.repeatPerPc.toFixed(4),
+        prod.BLPWebsiteNum||"",prod.WebsiteDescription||"",
+        prod.CurrentWebsitePrice||"",prod.SBPriceEaches||"",prod.SBPricePacks||"",
+        prod.FinalSellSB||"",prod.OMGSell||"",prod.OMGCost||"",
+        prod["Co_x002d_opNum"]||"",prod.StandardLeadTime||"",prod.LowParlevel||"",
+        prod.ProductURL||"",
+        prod.SubmissionStatus||"Draft",prod.SubmittedBy||"",
+        sizeStr
+      ]);
+      // Restore form state
+      form=JSON.parse(JSON.stringify(prevForm));
+      currentProduct=prevProduct;
+    });
+    const ws=XLSX.utils.aoa_to_sheet(rows);
+    // Auto-size columns
+    ws['!cols']=headers.map((h,i)=>{
+      const maxLen=Math.max(h.length,...rows.slice(1).map(r=>(String(r[i])||'').length));
+      return{wch:Math.min(maxLen+2,40)};
+    });
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,"Products");
+    // Add a Program Info sheet
+    const infoRows=[
+      ["Program Information"],
+      ["Client",proj?.Title||""],
+      ["Program",proj?.ProgramName||""],
+      ["Sales Rep",proj?.SalesRep||""],
+      ["Ownership",proj?.ProgramOwnership||""],
+      ["Margin Floor",proj?.MarginFloor||40],
+      ["BLP Upcharge %",proj?.BLPUpchargePct||0],
+      ["Merchant Account",proj?.MerchantAccount||"Client"],
+      ["CC Fee %",proj?.CCFeePct||0],
+      ["Shipper",proj?.ShipperAccount||"BLP"],
+      ["Roll Setup",proj?.RollSetUpIntoPrice||"No"],
+      ["Rounding",proj?.RoundTo||"0.01"],
+      ["Export Date",new Date().toLocaleDateString()],
+      ["Total Products",products.length],
+    ];
+    const ws2=XLSX.utils.aoa_to_sheet(infoRows);
+    ws2['!cols']=[{wch:20},{wch:30}];
+    XLSX.utils.book_append_sheet(wb,ws2,"Program Info");
+    // Generate filename
+    const fileName=((proj?.Title||"Project")+"_"+(proj?.ProgramName||"Export")).replace(/[^a-zA-Z0-9_-]/g,"_")+".xlsx";
+    XLSX.writeFile(wb,fileName);
+    showToast("Exported "+products.length+" products to "+fileName);
+  }catch(e){
+    console.error("Export error:",e);
+    showToast("Export failed: "+e.message,"error");
   }
 }
 
@@ -1774,6 +1961,7 @@ function renderProjectDetail(app){
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
         <div><div class="dash-title" style="font-size:16px">Products</div></div>
         <div style="display:flex;gap:8px">
+          <button class="btn-save" style="background:#27ae60" onclick="exportProjectToExcel()">📊 Export Excel</button>
           <button class="btn-save" style="background:#1a5276" onclick="openBulkImport()">📥 Bulk Import</button>
           <button class="btn-save" onclick="startNewProduct()">+ New Product</button>
         </div>
