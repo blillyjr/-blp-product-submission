@@ -625,6 +625,7 @@ function spFieldsToForm(sp){
     form.blpOwnershipUpcharge=currentProject.BLPUpchargePct!=null?String(currentProject.BLPUpchargePct):"15";
     form.hasSpread=currentProject.HasSpread||"No";
     form.spreadAmount=currentProject.SpreadAmount||"";
+    form.spreadType=currentProject.SpreadType||"$";
     form.shippingUpchargeType=currentProject.ShipUpchargeType||"None";
     form.shippingUpchargeAmount=currentProject.ShipUpchargeAmount!=null?String(currentProject.ShipUpchargeAmount):"";
     form.clientSuppliedStock=currentProject.ClientSuppliedStock||"No";
@@ -642,7 +643,7 @@ function spFieldsToForm(sp){
 function getDefaults(){
   return{
     submissionType:"Standard Product",
-    programOwnership:"Client Owned",marginFloor:"40",blpOwnershipUpcharge:"15",hasSpread:"No",spreadAmount:"",
+    programOwnership:"Client Owned",marginFloor:"40",blpOwnershipUpcharge:"15",hasSpread:"No",spreadType:"$",spreadAmount:"",
     shippingUpchargeType:"None",shippingUpchargeAmount:"",clientSuppliedStock:"No",
     merchantAccount:"Client",ccFeePct:"3.2",
     shipperAccount:"BLP",freightScenario:"Blank to Decorator",
@@ -751,6 +752,11 @@ function compute(){
   if(form.shippingUpchargeType==="Flat $")su=p(form.shippingUpchargeAmount);
   else if(form.shippingUpchargeType==="% of Transaction")su=spe*(p(form.shippingUpchargeAmount)/100);
   let fs=spe+su;
+  // Apply customer spread
+  if(form.hasSpread==="Yes"&&p(form.spreadAmount)>0){
+    if(form.spreadType==="%")fs=fs*(1+p(form.spreadAmount)/100);
+    else fs=fs+p(form.spreadAmount);
+  }
   // Rounding
   const roundVal=p(form.roundTo)||0.01;
   if(roundVal>=1)fs=Math.ceil(fs/roundVal)*roundVal;
@@ -806,7 +812,6 @@ const SALES_REQUIRED=[
   {key:"websiteCategory",label:"Product Category"},
   {key:"vendorItemNum",label:"Vendor Item #"},
   {key:"itemName",label:"Item Name"},
-  {key:"itemDescription",label:"Item Description"},
   {key:"stockStatus",label:"Stock Status"},
   {key:"supplierMinimum",label:"Supplier Minimum"},
   {key:"websiteMinimum",label:"Website Minimum"},
@@ -938,6 +943,10 @@ function computeForSize(sz){
   if(form.shippingUpchargeType==="Flat $")su=p(form.shippingUpchargeAmount);
   else if(form.shippingUpchargeType==="% of Transaction")su=spe*(p(form.shippingUpchargeAmount)/100);
   let fs=spe+su;
+  if(form.hasSpread==="Yes"&&p(form.spreadAmount)>0){
+    if(form.spreadType==="%")fs=fs*(1+p(form.spreadAmount)/100);
+    else fs=fs+p(form.spreadAmount);
+  }
   const roundVal=p(form.roundTo)||0.01;
   if(roundVal>=1)fs=Math.ceil(fs/roundVal)*roundVal;
   return{netCost:tn,programPrice:pp,sellEach:fs};
@@ -1206,6 +1215,7 @@ function startNewProduct(){
     form.blpOwnershipUpcharge=currentProject.BLPUpchargePct!=null?String(currentProject.BLPUpchargePct):"15";
     form.hasSpread=currentProject.HasSpread||"No";
     form.spreadAmount=currentProject.SpreadAmount||"";
+    form.spreadType=currentProject.SpreadType||"$";
     form.shippingUpchargeType=currentProject.ShipUpchargeType||"None";
     form.shippingUpchargeAmount=currentProject.ShipUpchargeAmount!=null?String(currentProject.ShipUpchargeAmount):"";
     form.clientSuppliedStock=currentProject.ClientSuppliedStock||"No";
@@ -2070,7 +2080,9 @@ function renderForm(app){
       </div>
       <div class="row row-2">
         ${fld("Customer Spread",mkTog("hasSpread",["Yes","No"]))}
-        ${fld("Spread Amount",mkIn("spreadAmount","text","e.g., $2.00"),{visible:form.hasSpread==="Yes"})}
+        ${form.hasSpread==="Yes"?fld("Spread Type",mkTog("spreadType",["$","%"])):''}
+      </div>
+      ${form.hasSpread==="Yes"?'<div class="row row-2">'+fld("Spread Amount",mkIn("spreadAmount","number",""),{help:form.spreadType==="%"?"Percentage added to sell price (e.g., 20 = 20%)":"Flat dollar amount added to sell price"})+'<div></div></div>':''}
       </div>
       <div class="row row-2">
         ${fld("Shipping Upcharge",mkTog("shippingUpchargeType",["None","Flat $","% of Transaction"]))}
@@ -2389,6 +2401,7 @@ function renderForm(app){
       +rr("Setup",form.rollSetupIntoPrice==="Yes"?"Rolled in ($"+c.repeatPerPc.toFixed(4)+"/unit)":"Charged separately")
       +rr("Shipper",form.shipperAccount==="BLP"?"BLP — "+form.freightScenario:"Client shipper")
       +rr("Rounding","Nearest $"+form.roundTo)
+      +(form.hasSpread==="Yes"?rr("Customer Spread",form.spreadType==="%" ?form.spreadAmount+"% ($"+(c.finalSell-c.sellPriceEach-c.shippingUpcharge>0?(c.finalSell-c.sellPriceEach-c.shippingUpcharge).toFixed(2):"0")+")":"$"+p(form.spreadAmount).toFixed(2)):"")
       +rr("Ships In",form.shipsIn)+(c.marginWarning?'<div class="margin-warning"><span class="margin-warning-icon">⚠️</span><span class="margin-warning-text">Margin below 35%!</span></div>':''))
     +(isApparel()&&getEnabledSizes().length>0?crd("Per-Size Pricing Breakdown","",
       `<table class="size-grid">
