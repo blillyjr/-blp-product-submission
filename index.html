@@ -354,17 +354,31 @@ async function uploadProductFile(file){
   }catch(e){showToast("Upload failed: "+e.message,"error");}
 }
 async function loadProductFiles(){
-  if(!currentProduct?.id){productFiles=[];return;}
+  if(!currentProduct?.id){productFiles=[];filesLoading=false;return;}
   const folderPath=getProductFolderPath();
   filesLoading=true;
+  render();
   try{
-    const data=await graphGet(`/sites/${siteId}/drive/root:/${folderPath}:/children?$select=id,name,size,lastModifiedDateTime,webUrl,file&$top=100`);
-    productFiles=data.value||[];
+    const controller=new AbortController();
+    const timeout=setTimeout(()=>controller.abort(),10000); // 10 second timeout
+    await getToken();
+    const r=await fetch(`https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/${folderPath}:/children?$select=id,name,size,lastModifiedDateTime,webUrl,file&$top=100`,{
+      headers:{Authorization:`Bearer ${accessToken}`,"Prefer":"HonorNonIndexedQueriesWarningMayFailRandomly"},
+      signal:controller.signal
+    });
+    clearTimeout(timeout);
+    if(r.ok){
+      const data=await r.json();
+      productFiles=data.value||[];
+    }else{
+      productFiles=[];
+    }
   }catch(e){
-    // Folder doesn't exist yet — that's fine
+    // Folder doesn't exist yet or timeout — that's fine
     productFiles=[];
   }
   filesLoading=false;
+  render();
 }
 async function deleteProductFile(fileId,fileName){
   if(!confirm(`Delete "${fileName}"?`))return;
@@ -500,7 +514,7 @@ function formToSPFields(){
   };
   // Apparel size data - store as JSON in Notes or a dedicated field
   if(isApparel()){
-    f.SizeData=JSON.stringify({sizes:form.sizes,singlePrice:form.singlePriceAllSizes});
+    f.SizeData=JSON.stringify({sizes:form.sizes,singlePrice:form.singlePriceAllSizes,sizePricingMode:form.sizePricingMode});
   }
   // Decoration fields (up to 4)
   for(let i=0;i<4;i++){
@@ -585,6 +599,7 @@ function spFieldsToForm(sp){
       const sd=JSON.parse(sp.SizeData);
       if(sd.sizes)form.sizes=sd.sizes;
       if(sd.singlePrice)form.singlePriceAllSizes=sd.singlePrice;
+      if(sd.sizePricingMode)form.sizePricingMode=sd.sizePricingMode;
     }catch(e){}
   }
   // Load decorations
@@ -656,11 +671,12 @@ function getDefaults(){
     submissionStatus:"Draft",
     // Apparel size grid
     singlePriceAllSizes:"No",
+    sizePricingMode:"Upcharge",
     sizes:{
-      "XS":{enabled:true,upcharge:"0",qty:"",par:""},S:{enabled:true,upcharge:"0",qty:"",par:""},M:{enabled:true,upcharge:"0",qty:"",par:""},
-      L:{enabled:true,upcharge:"0",qty:"",par:""},XL:{enabled:true,upcharge:"0",qty:"",par:""},
-      "2XL":{enabled:false,upcharge:"",qty:"",par:""},"3XL":{enabled:false,upcharge:"",qty:"",par:""},
-      "4XL":{enabled:false,upcharge:"",qty:"",par:""},"5XL":{enabled:false,upcharge:"",qty:"",par:""},
+      "XS":{enabled:true,upcharge:"0",qty:"",par:"",sellPrice:""},S:{enabled:true,upcharge:"0",qty:"",par:"",sellPrice:""},M:{enabled:true,upcharge:"0",qty:"",par:"",sellPrice:""},
+      L:{enabled:true,upcharge:"0",qty:"",par:"",sellPrice:""},XL:{enabled:true,upcharge:"0",qty:"",par:"",sellPrice:""},
+      "2XL":{enabled:false,upcharge:"",qty:"",par:"",sellPrice:""},"3XL":{enabled:false,upcharge:"",qty:"",par:"",sellPrice:""},
+      "4XL":{enabled:false,upcharge:"",qty:"",par:"",sellPrice:""},"5XL":{enabled:false,upcharge:"",qty:"",par:"",sellPrice:""},
     },
   };
 }
@@ -1122,6 +1138,7 @@ async function handleSaveColorVariant(){
   form.customPkgUnitCost=prevForm.customPkgUnitCost;
   form.standardLeadTime=prevForm.standardLeadTime;
   form.singlePriceAllSizes=prevForm.singlePriceAllSizes;
+  form.sizePricingMode=prevForm.sizePricingMode;
   form.sizes=JSON.parse(JSON.stringify(prevForm.sizes));
   // Copy decoration methods and locations but clear PMS colors
   form.decorations=prevForm.decorations.map(d=>({
@@ -2109,21 +2126,25 @@ function renderForm(app){
         <input type="checkbox" id="singlePriceToggle" ${form.singlePriceAllSizes==="Yes"?'checked':''} onchange="setVal('singlePriceAllSizes',this.checked?'Yes':'No')">
         <label for="singlePriceToggle" style="cursor:pointer">Single price for all sizes (no upsize upcharges)</label>
       </div>
+      ${form.singlePriceAllSizes==="No"?'<div class="single-price-toggle" style="background:#d6eaf8">'+fld("Upsize Pricing Mode",mkTog("sizePricingMode",["Upcharge","Direct Sell Price"]))+'</div>':''}
       <table class="size-grid">
-        <tr><th></th><th>Size</th><th>Base Cost</th>${form.singlePriceAllSizes==="No"?'<th>Upcharge</th><th>Net Cost</th>':'<th>Net Cost</th>'}<th>1st Order Qty</th><th>Par Level</th><th>Sell Each</th></tr>
+        <tr><th></th><th>Size</th><th>Base Cost</th>${form.singlePriceAllSizes==="No"?(form.sizePricingMode==="Upcharge"?'<th>Upcharge</th><th>Net Cost</th>':'<th>Net Cost</th><th>Sell Price</th>'):'<th>Net Cost</th>'}<th>1st Order Qty</th><th>Par Level</th><th>Sell Each</th></tr>
         ${ALL_SIZES.map(sz=>{
           const s=form.sizes[sz],enabled=s.enabled,isUp=isUpsize(sz);
           const cost=getSizeCost(sz);
-          const sell=enabled&&p(form.itemCostNet)>0?computeForSize(sz).sellEach:0;
+          const autoSell=enabled&&p(form.itemCostNet)>0?computeForSize(sz).sellEach:0;
+          const displaySell=form.sizePricingMode==="Direct Sell Price"&&isUp&&p(s.sellPrice)>0?p(s.sellPrice):autoSell;
           return `<tr class="${isUp&&enabled?'upsize':''}">
             <td><input type="checkbox" ${enabled?'checked':''} onchange="toggleSize('${sz}')"></td>
             <td class="size-label">${sz}</td>
             <td class="cost-val">${enabled?'$'+p(form.itemCostNet).toFixed(2):'-'}</td>
-            ${form.singlePriceAllSizes==="No"?`<td>${enabled&&isUp?'<input type="number" value="'+(s.upcharge||'')+'" placeholder="0" onblur="setSizeField(\''+sz+'\',\'upcharge\',this.value)" oninput="setSizeField(\''+sz+'\',\'upcharge\',this.value,true)" step="0.01">':enabled?'—':'-'}</td>
-            <td class="cost-val">${enabled?'$'+cost.toFixed(2):'-'}</td>`:`<td class="cost-val">${enabled?'$'+cost.toFixed(2):'-'}</td>`}
+            ${form.singlePriceAllSizes==="No"?(form.sizePricingMode==="Upcharge"?
+              '<td>'+(enabled&&isUp?'<input type="number" value="'+(s.upcharge||'')+'" placeholder="0" onblur="setSizeField(\''+sz+'\',\'upcharge\',this.value)" oninput="setSizeField(\''+sz+'\',\'upcharge\',this.value,true)" step="any">':enabled?'\u2014':'-')+'</td><td class="cost-val">'+(enabled?'$'+cost.toFixed(2):'-')+'</td>':
+              '<td class="cost-val">'+(enabled?'$'+cost.toFixed(2):'-')+'</td><td>'+(enabled&&isUp?'<input type="number" value="'+(s.sellPrice||'')+'" placeholder="'+(autoSell>0?autoSell.toFixed(2):'')+'" onblur="setSizeField(\''+sz+'\',\'sellPrice\',this.value)" oninput="setSizeField(\''+sz+'\',\'sellPrice\',this.value,true)" step="any">':enabled?'$'+(autoSell>0?autoSell.toFixed(2):'-'):'-')+'</td>')
+            :'<td class="cost-val">'+(enabled?'$'+cost.toFixed(2):'-')+'</td>'}
             <td>${enabled?'<input type="number" value="'+(s.qty||'')+'" placeholder="0" onblur="setSizeField(\''+sz+'\',\'qty\',this.value)" oninput="setSizeField(\''+sz+'\',\'qty\',this.value,true)" min="0">':'-'}</td>
             <td>${enabled?'<input type="number" value="'+(s.par||'')+'" placeholder="0" onblur="setSizeField(\''+sz+'\',\'par\',this.value)" oninput="setSizeField(\''+sz+'\',\'par\',this.value,true)" min="0">':'-'}</td>
-            <td class="sell-val">${enabled&&sell>0?'$'+sell.toFixed(2):'-'}</td>
+            <td class="sell-val">${enabled&&displaySell>0?'$'+displaySell.toFixed(2):'-'}</td>
           </tr>`;
         }).join('')}
       </table>
