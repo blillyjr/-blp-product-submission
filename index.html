@@ -514,6 +514,7 @@ function formToSPFields(){
     f[`Deco${n}PMS`]=d.pms||null;
     f[`Deco${n}SetupSell`]=p(d.setupSell)||null;
     f[`Deco${n}SetupCost`]=p(d.setupCost)||null;
+    f[`Deco${n}RunCharge`]=p(d.runCharge)||null;
   }
   return f;
 }
@@ -597,10 +598,11 @@ function spFieldsToForm(sp){
         colors:sp[`Deco${i}Colors`]||"",pms:sp[`Deco${i}PMS`]||"",
         setupSell:sp[`Deco${i}SetupSell`]!=null?String(sp[`Deco${i}SetupSell`]):"",
         setupCost:sp[`Deco${i}SetupCost`]!=null?String(sp[`Deco${i}SetupCost`]):"",
+        runCharge:sp[`Deco${i}RunCharge`]!=null?String(sp[`Deco${i}RunCharge`]):"",
       });
     }
   }
-  if(!form.decorations.length)form.decorations=[{method:"",location:"",dimensions:"",logo:"",colors:"",pms:"",setupSell:"",setupCost:""}];
+  if(!form.decorations.length)form.decorations=[{method:"",location:"",dimensions:"",logo:"",colors:"",pms:"",setupSell:"",setupCost:"",runCharge:""}];
   // Load project-level settings
   if(currentProject){
     form.programOwnership=currentProject.ProgramOwnership||"Client Owned";
@@ -637,14 +639,14 @@ function getDefaults(){
     firstQtyToOrder:"",itemWeight:"",itemSizeDimensional:"",
     sellInBundles:"No",bundleQty:"",
     decorationSupplier:"",
-    decorations:[{method:"",location:"",dimensions:"",logo:"",colors:"",pms:"",setupSell:"",setupCost:""}],
+    decorations:[{method:"",location:"",dimensions:"",logo:"",colors:"",pms:"",setupSell:"",setupCost:"",runCharge:""}],
     pmsCharge:"0",
     shipsIn:"Individual Box",masterCartonCost:"1.00",customPackaging:"No",
     customPackagingType:"",customPkgSetupCost:"",customPkgUnitCost:"",
     itemCostNet:"",runCharge:"0",runChargeAddlLocation:"0",
     initialSetupCharge:"0",repeatSetup:"0",
     foldingPolybag:"0",shirtSizeSticker:"0",
-    inboundFreightMethod:"Category Default",inboundFreightTotal:"",includeInboundFreight:"No",
+    inboundFreightMethod:"Category Default",inboundFreightTotal:"",includeInboundFreight:"Yes",
     soldAs:"Each",bundleSource:"N/A",bundleFeePerPack:"0",qtyPerPack:"1",
     productURL:"",coopNum:"",standardLeadTime:"",is24HrAvailable:"No",
     lowParLevel:"",notes:"",
@@ -690,7 +692,9 @@ function setVal(key,val,silent){
 function compute(){
   const baseIc=p(form.itemCostNet);
   const ic=isApparel()&&getEnabledSizes().length>0?getBlendedCost():baseIc;
-  const rc=p(form.runCharge),rca=p(form.runChargeAddlLocation),
+  // Sum run charges from all decorations
+  const totalRunCharge=form.decorations.reduce((sum,d)=>sum+p(d.runCharge),0);
+  const rc=totalRunCharge||p(form.runCharge),rca=p(form.runChargeAddlLocation),
     rs=p(form.repeatSetup),fq=isApparel()?getTotalSizeQty()||p(form.firstQtyToOrder)||1:p(form.firstQtyToOrder)||1,
     rppc=form.rollSetupIntoPrice==="Yes"&&fq>0?rs/fq:0,
     fp=p(form.foldingPolybag),st=p(form.shirtSizeSticker),
@@ -774,8 +778,8 @@ function next(){currentStep=Math.min(currentStep+1,getSteps().length-1);render()
 function prev(){currentStep=Math.max(currentStep-1,0);render();}
 
 // Decoration helpers
-function addDecoration(){if(form.decorations.length<4){form.decorations.push({method:"",location:"",dimensions:"",logo:"",colors:"",pms:"",setupSell:"",setupCost:""});render();}}
-function removeDecoration(i){form.decorations.splice(i,1);if(!form.decorations.length)form.decorations.push({method:"",location:"",dimensions:"",logo:"",colors:"",pms:"",setupSell:"",setupCost:""});render();}
+function addDecoration(){if(form.decorations.length<4){form.decorations.push({method:"",location:"",dimensions:"",logo:"",colors:"",pms:"",setupSell:"",setupCost:"",runCharge:""});render();}}
+function removeDecoration(i){form.decorations.splice(i,1);if(!form.decorations.length)form.decorations.push({method:"",location:"",dimensions:"",logo:"",colors:"",pms:"",setupSell:"",setupCost:"",runCharge:""});render();}
 function setDeco(i,k,v){form.decorations[i][k]=v;render();}
 
 // ============================================================
@@ -879,7 +883,9 @@ function getSizeCost(sz){
   return base+p(form.sizes[sz].upcharge);
 }
 function computeForSize(sz){
-  const ic=getSizeCost(sz),rc=p(form.runCharge),rca=p(form.runChargeAddlLocation),
+  const ic=getSizeCost(sz),
+    totalRunCharge=form.decorations.reduce((sum,d)=>sum+p(d.runCharge),0),
+    rc=totalRunCharge||p(form.runCharge),rca=p(form.runChargeAddlLocation),
     rs=p(form.repeatSetup),fq=getTotalSizeQty()||1,
     rppc=form.rollSetupIntoPrice==="Yes"&&fq>0?rs/fq:0,
     fp=p(form.foldingPolybag),st=p(form.shirtSizeSticker),
@@ -2148,6 +2154,10 @@ function renderForm(app){
           <div class="field"><label class="field-label">PMS Colors</label><input type="text" value="${dec.pms}" onchange="setDeco(${i},'pms',this.value)"></div>
           <div class="field"><label class="field-label">Setup Cost (net)</label><input type="number" value="${dec.setupCost||''}" onchange="setDeco(${i},'setupCost',this.value)" placeholder="0"></div>
         </div>
+        <div class="row row-2">
+          <div class="field"><label class="field-label">Run Charge (net/pc)</label><input type="number" value="${dec.runCharge||''}" onblur="setDeco(${i},'runCharge',this.value)" oninput="form.decorations[${i}].runCharge=this.value;" placeholder="0" step="any"></div>
+          <div></div>
+        </div>
       </div>`;
     });
     html+=crd("Decoration Supplier","",fld("Supplier",mkIn("decorationSupplier","text","e.g., Promos Ink")),"sales")
@@ -2345,18 +2355,33 @@ function renderForm(app){
       rr("Ownership",form.programOwnership)+rr("Margin",c.effectiveMargin+"%")+rr("Supplier",form.supplier)+rr("Category",form.websiteCategory)
       +rr("Item",form.itemName+" ("+form.vendorItemNum+")")+rr("Color",form.itemColor)+rr("Stock",form.stockStatus)
       +(isApparel()?rr("Sizes",getEnabledSizes().join(", "))+rr("Total Units",String(getTotalSizeQty()))+rr("Blended Cost","$"+getBlendedCost().toFixed(2))+(form.singlePriceAllSizes==="Yes"?rr("Pricing","Single price all sizes"):""):"")
-      +form.decorations.map((d,i)=>rr("Deco "+(i+1),(d.method||"")+" @ "+(d.location||""))).join("")
+      +form.decorations.map((d,i)=>rr("Deco "+(i+1),(d.method||"")+" @ "+(d.location||"")+(p(d.runCharge)>0?" — Run: $"+p(d.runCharge).toFixed(2)+"/pc":""))).join("")
     )+crd("Pricing","",`<div class="review-summary"><div class="row row-3">
       <div><div class="pricing-label">Net</div><div class="pricing-value">$${c.totalNet.toFixed(2)}</div></div>
       <div><div class="pricing-label">Program</div><div class="pricing-value blue">$${c.programPrice.toFixed(2)}</div></div>
       <div><div class="pricing-label">Sell</div><div class="pricing-value green">$${c.finalSell.toFixed(2)}</div></div>
-    </div></div>`+rr("Item Cost","$"+p(form.itemCostNet).toFixed(2))+rr("Inbound Freight","$"+c.inboundFreight.toFixed(4))
+    </div></div>`+rr("Item Cost","$"+p(form.itemCostNet).toFixed(2))
+      +rr("Total Run Charges","$"+form.decorations.reduce((s,d)=>s+p(d.runCharge),0).toFixed(2)+" ("+form.decorations.filter(d=>p(d.runCharge)>0).map((d,i)=>d.location+": $"+p(d.runCharge).toFixed(2)).join(", ")+")")
+      +rr("Inbound Freight","$"+c.inboundFreight.toFixed(4))
       +(c.outboundFreight>0?rr("Outbound Freight","$"+c.outboundFreight.toFixed(4)):'')
       +rr("CC Fee",form.merchantAccount==="BLP"?c.ccRate.toFixed(1)+"% ($"+c.ccFee.toFixed(2)+")":"N/A — Client processes")
       +rr("Setup",form.rollSetupIntoPrice==="Yes"?"Rolled in ($"+c.repeatPerPc.toFixed(4)+"/unit)":"Charged separately")
       +rr("Shipper",form.shipperAccount==="BLP"?"BLP — "+form.freightScenario:"Client shipper")
       +rr("Rounding","Nearest $"+form.roundTo)
-      +rr("Ships In",form.shipsIn)+(c.marginWarning?'<div class="margin-warning"><span class="margin-warning-icon">⚠️</span><span class="margin-warning-text">Margin below 35%!</span></div>':''));
+      +rr("Ships In",form.shipsIn)+(c.marginWarning?'<div class="margin-warning"><span class="margin-warning-icon">⚠️</span><span class="margin-warning-text">Margin below 35%!</span></div>':''))
+    +(isApparel()&&getEnabledSizes().length>0?crd("Per-Size Pricing Breakdown","",
+      `<table class="size-grid">
+        <tr><th>Size</th><th>Base Cost</th><th>Upcharge</th><th>Net Cost</th><th>Qty</th><th>Par</th><th>Sell Each</th><th>Line Total</th></tr>
+        ${getEnabledSizes().map(sz=>{
+          const s=form.sizes[sz];
+          const cost=getSizeCost(sz);
+          const sell=computeForSize(sz).sellEach;
+          const qty=p(s.qty);
+          return '<tr><td class="size-label">'+sz+'</td><td>$'+p(form.itemCostNet).toFixed(2)+'</td><td>'+(isUpsize(sz)?'$'+p(s.upcharge).toFixed(2):'—')+'</td><td>$'+cost.toFixed(2)+'</td><td>'+qty+'</td><td>'+(s.par||'—')+'</td><td class="sell-val">$'+sell.toFixed(2)+'</td><td>$'+(sell*qty).toFixed(2)+'</td></tr>';
+        }).join('')}
+        <tr style="font-weight:700;border-top:2px solid #1a5276"><td>Total</td><td></td><td></td><td></td><td>${getTotalSizeQty()}</td><td></td><td></td><td>$${getEnabledSizes().reduce((s,sz)=>s+computeForSize(sz).sellEach*p(form.sizes[sz].qty),0).toFixed(2)}</td></tr>
+      </table>`
+    ):'');
   }
 
   // Navigation + Save + Completeness
