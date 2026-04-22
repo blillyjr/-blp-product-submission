@@ -515,6 +515,8 @@ function formToSPFields(){
   // Apparel size data - store as JSON in Notes or a dedicated field
   if(isApparel()){
     f.SizeData=JSON.stringify({sizes:form.sizes,singlePrice:form.singlePriceAllSizes,sizePricingMode:form.sizePricingMode});
+    if(form.priceBreaks.length>0)f.PriceBreaks=JSON.stringify(form.priceBreaks);
+    f.HasPriceBreaks=form.hasPriceBreaks;
   }
   // Decoration fields (up to 4)
   for(let i=0;i<4;i++){
@@ -602,6 +604,11 @@ function spFieldsToForm(sp){
       if(sd.sizePricingMode)form.sizePricingMode=sd.sizePricingMode;
     }catch(e){}
   }
+  // Load price breaks
+  form.hasPriceBreaks=sp.HasPriceBreaks||"No";
+  if(sp.PriceBreaks){
+    try{form.priceBreaks=JSON.parse(sp.PriceBreaks);}catch(e){form.priceBreaks=[];}
+  }else{form.priceBreaks=[];}
   // Load decorations
   form.decorations=[];
   for(let i=1;i<=4;i++){
@@ -673,6 +680,8 @@ function getDefaults(){
     // Apparel size grid
     singlePriceAllSizes:"No",
     sizePricingMode:"Upcharge",
+    hasPriceBreaks:"No",
+    priceBreaks:[],
     sizes:{
       "XS":{enabled:true,upcharge:"0",qty:"",par:"",sellPrice:""},S:{enabled:true,upcharge:"0",qty:"",par:"",sellPrice:""},M:{enabled:true,upcharge:"0",qty:"",par:"",sellPrice:""},
       L:{enabled:true,upcharge:"0",qty:"",par:"",sellPrice:""},XL:{enabled:true,upcharge:"0",qty:"",par:"",sellPrice:""},
@@ -952,6 +961,64 @@ function computeForSize(sz){
   return{netCost:tn,programPrice:pp,sellEach:fs};
 }
 function getTotalSizeQty(){return getEnabledSizes().reduce((sum,sz)=>sum+p(form.sizes[sz].qty),0);}
+
+// Price break functions
+function addPriceBreak(){
+  const lastQty=form.priceBreaks.length>0?p(form.priceBreaks[form.priceBreaks.length-1].maxQty):0;
+  form.priceBreaks.push({minQty:String(lastQty+1),maxQty:"",itemCost:"",runCharge:"",sellOverride:""});
+  render();
+}
+function removePriceBreak(i){form.priceBreaks.splice(i,1);render();}
+function setPriceBreak(i,key,val){form.priceBreaks[i][key]=val;}
+
+function computeForBreak(brk){
+  // Calculate pricing for a specific quantity break tier
+  const ic=p(brk.itemCost)||p(form.itemCostNet);
+  const rc=p(brk.runCharge)>=0&&brk.runCharge!==""?p(brk.runCharge):form.decorations.reduce((s,d)=>s+p(d.runCharge),0)||p(form.runCharge);
+  const rca=p(form.runChargeAddlLocation);
+  const fq=p(brk.minQty)||1;
+  const rs=p(form.repeatSetup);
+  const rppc=form.rollSetupIntoPrice==="Yes"&&fq>0?rs/fq:0;
+  const fp=p(form.foldingPolybag),st=p(form.shirtSizeSticker);
+  const bf=p(form.bundleFeePerPack),qp=p(form.qtyPerPack)||1,bppc=qp>0?bf/qp:0;
+  const masterCarton=form.shipsIn==="Master Carton"?p(form.masterCartonCost):0;
+  const customPkgUnit=form.customPackaging==="Yes"?p(form.customPkgUnitCost):0;
+  const tn=ic+rc+rca+rppc+fp+st+bppc+masterCarton+customPkgUnit;
+  const baseMf=p(form.marginFloor)||40;
+  const blpUp=form.programOwnership==="BLP Owned"?(p(form.blpOwnershipUpcharge)||15):0;
+  const effectiveMf=baseMf+blpUp,md=(100-effectiveMf)/100;
+  const freightPct=getFreightPct();
+  let ibf=0,obf=0;
+  if(form.shipperAccount==="Client"){ibf=0;obf=0;}
+  else if(isInStock()){
+    if(form.freightScenario==="Pre-decorated at Supplier"){
+      ibf=0;obf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct):0;
+    }else{
+      ibf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct):0;
+      obf=ibf;
+    }
+  }else{
+    if(form.freightScenario==="Blank to Decorator")ibf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct):0;
+    obf=0;
+  }
+  const pp=md>0?(tn+ibf+obf)/md:0;
+  const rf=isInStock()?0.16/qp:0,pf=isInStock()?(pp<=9.99?.15:pp<=24.99?.30:.45)/qp:0;
+  const ccRate=form.merchantAccount==="BLP"?(p(form.ccFeePct)||3.2)/100:0;
+  const cc=pp*ccRate,spe=pp+rf+pf+cc;
+  let su=0;
+  if(form.shippingUpchargeType==="Flat $")su=p(form.shippingUpchargeAmount);
+  else if(form.shippingUpchargeType==="% of Transaction")su=spe*(p(form.shippingUpchargeAmount)/100);
+  let fs=spe+su;
+  if(form.hasSpread==="Yes"&&p(form.spreadAmount)>0){
+    if(form.spreadType==="%")fs=fs*(1+p(form.spreadAmount)/100);
+    else fs=fs+p(form.spreadAmount);
+  }
+  const roundVal=p(form.roundTo)||0.01;
+  if(roundVal>=1)fs=Math.ceil(fs/roundVal)*roundVal;
+  // Allow sell override
+  if(p(brk.sellOverride)>0)fs=p(brk.sellOverride);
+  return{itemCost:ic,totalNet:tn,programPrice:pp,sellEach:fs};
+}
 function getBlendedCost(){
   const enabled=getEnabledSizes();
   const totalQty=getTotalSizeQty();
@@ -2225,7 +2292,29 @@ function renderForm(app){
         <div><div class="pricing-label">Net</div><div class="pricing-value">$${c.totalNet.toFixed(2)}</div></div>
         <div><div class="pricing-label">Program</div><div class="pricing-value blue">$${c.programPrice.toFixed(2)}</div></div>
         <div><div class="pricing-label">Sell</div><div class="pricing-value green">$${c.finalSell.toFixed(2)}</div></div>
-      </div></div>`):'');
+      </div></div>`):'')
+    +crd("Quantity Price Breaks","Optional: Set tiered pricing for different order quantities.",
+      `${fld("Has Price Breaks?",mkTog("hasPriceBreaks",["Yes","No"]))}
+      ${form.hasPriceBreaks==="Yes"?`
+        <table class="size-grid" style="margin-top:8px">
+          <tr><th>Min Qty</th><th>Max Qty</th><th>Item Cost</th><th>Run Charge</th><th>Sell Override</th><th>Calc Sell</th><th></th></tr>
+          ${form.priceBreaks.map((brk,i)=>{
+            const bc=computeForBreak(brk);
+            return '<tr>'+
+              '<td><input type="number" value="'+(brk.minQty||'')+'" placeholder="1" onblur="setPriceBreak('+i+',\\'minQty\\',this.value);render()" style="width:65px"></td>'+
+              '<td><input type="number" value="'+(brk.maxQty||'')+'" placeholder="∞" onblur="setPriceBreak('+i+',\\'maxQty\\',this.value);render()" style="width:65px"></td>'+
+              '<td><input type="number" value="'+(brk.itemCost||'')+'" placeholder="'+p(form.itemCostNet).toFixed(2)+'" onblur="setPriceBreak('+i+',\\'itemCost\\',this.value);render()" step="any" style="width:75px"></td>'+
+              '<td><input type="number" value="'+(brk.runCharge||'')+'" placeholder="base" onblur="setPriceBreak('+i+',\\'runCharge\\',this.value);render()" step="any" style="width:75px"></td>'+
+              '<td><input type="number" value="'+(brk.sellOverride||'')+'" placeholder="auto" onblur="setPriceBreak('+i+',\\'sellOverride\\',this.value);render()" step="any" style="width:75px"></td>'+
+              '<td class="sell-val">$'+bc.sellEach.toFixed(2)+'</td>'+
+              '<td><button onclick="removePriceBreak('+i+')" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:14px">×</button></td>'+
+            '</tr>';
+          }).join('')}
+        </table>
+        <button class="btn-add-item" onclick="addPriceBreak()" style="margin-top:8px">+ Add Tier</button>
+        <div style="font-size:10px;color:#7f8c8d;margin-top:6px">Leave Item Cost blank to use base cost. Leave Run Charge blank to use decoration run charges. Leave Sell Override blank for auto-calculation.</div>
+      `:'<div style="font-size:11px;color:#7f8c8d;margin-top:4px;font-style:italic">Enable to set different prices at different order quantities.</div>'}`
+    );
   }
 
   else if(stepId==="freight"){
@@ -2414,6 +2503,15 @@ function renderForm(app){
           return '<tr><td class="size-label">'+sz+'</td><td>$'+p(form.itemCostNet).toFixed(2)+'</td><td>'+(isUpsize(sz)?'$'+p(s.upcharge).toFixed(2):'—')+'</td><td>$'+cost.toFixed(2)+'</td><td>'+qty+'</td><td>'+(s.par||'—')+'</td><td class="sell-val">$'+sell.toFixed(2)+'</td><td>$'+(sell*qty).toFixed(2)+'</td></tr>';
         }).join('')}
         <tr style="font-weight:700;border-top:2px solid #1a5276"><td>Total</td><td></td><td></td><td></td><td>${getTotalSizeQty()}</td><td></td><td></td><td>$${getEnabledSizes().reduce((s,sz)=>s+computeForSize(sz).sellEach*p(form.sizes[sz].qty),0).toFixed(2)}</td></tr>
+      </table>`
+    ):'')
+    +(form.hasPriceBreaks==="Yes"&&form.priceBreaks.length>0?crd("Quantity Price Breaks","",
+      `<table class="size-grid">
+        <tr><th>Qty Range</th><th>Item Cost</th><th>Run Charge</th><th>Net</th><th>Program</th><th>Sell</th></tr>
+        ${form.priceBreaks.map(brk=>{
+          const bc=computeForBreak(brk);
+          return '<tr><td>'+(brk.minQty||'1')+'—'+(brk.maxQty||'∞')+'</td><td>$'+bc.itemCost.toFixed(2)+'</td><td>$'+(p(brk.runCharge)>=0&&brk.runCharge!==""?p(brk.runCharge):form.decorations.reduce((s,d)=>s+p(d.runCharge),0)).toFixed(2)+'</td><td>$'+bc.totalNet.toFixed(2)+'</td><td class="blue">$'+bc.programPrice.toFixed(2)+'</td><td class="sell-val">$'+bc.sellEach.toFixed(2)+'</td></tr>';
+        }).join('')}
       </table>`
     ):'');
   }
