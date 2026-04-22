@@ -971,6 +971,27 @@ function addPriceBreak(){
 function removePriceBreak(i){form.priceBreaks.splice(i,1);render();}
 function setPriceBreak(i,key,val){form.priceBreaks[i][key]=val;}
 
+function renderPriceBreaksGrid(){
+  let html='<table class="size-grid" style="margin-top:8px">';
+  html+='<tr><th>Min Qty</th><th>Max Qty</th><th>Item Cost</th><th>Run Charge</th><th>Sell Override</th><th>Calc Sell</th><th></th></tr>';
+  form.priceBreaks.forEach(function(brk,i){
+    var bc=computeForBreak(brk);
+    html+='<tr>';
+    html+='<td><input type="number" value="'+(brk.minQty||'')+'" placeholder="1" onblur="setPriceBreak('+i+',\'minQty\',this.value);render()" style="width:65px"></td>';
+    html+='<td><input type="number" value="'+(brk.maxQty||'')+'" placeholder="∞" onblur="setPriceBreak('+i+',\'maxQty\',this.value);render()" style="width:65px"></td>';
+    html+='<td><input type="number" value="'+(brk.itemCost||'')+'" placeholder="'+p(form.itemCostNet).toFixed(2)+'" onblur="setPriceBreak('+i+',\'itemCost\',this.value);render()" step="any" style="width:75px"></td>';
+    html+='<td><input type="number" value="'+(brk.runCharge||'')+'" placeholder="base" onblur="setPriceBreak('+i+',\'runCharge\',this.value);render()" step="any" style="width:75px"></td>';
+    html+='<td><input type="number" value="'+(brk.sellOverride||'')+'" placeholder="auto" onblur="setPriceBreak('+i+',\'sellOverride\',this.value);render()" step="any" style="width:75px"></td>';
+    html+='<td class="sell-val">$'+bc.sellEach.toFixed(2)+'</td>';
+    html+='<td><button onclick="removePriceBreak('+i+')" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:14px">×</button></td>';
+    html+='</tr>';
+  });
+  html+='</table>';
+  html+='<button class="btn-add-item" onclick="addPriceBreak()" style="margin-top:8px">+ Add Tier</button>';
+  html+='<div style="font-size:10px;color:#7f8c8d;margin-top:6px">Leave Item Cost blank to use base cost. Leave Run Charge blank to use decoration run charges. Leave Sell Override blank for auto-calculation.</div>';
+  return html;
+}
+
 function computeForBreak(brk){
   // Calculate pricing for a specific quantity break tier
   const ic=p(brk.itemCost)||p(form.itemCostNet);
@@ -2295,25 +2316,7 @@ function renderForm(app){
       </div></div>`):'')
     +crd("Quantity Price Breaks","Optional: Set tiered pricing for different order quantities.",
       `${fld("Has Price Breaks?",mkTog("hasPriceBreaks",["Yes","No"]))}
-      ${form.hasPriceBreaks==="Yes"?`
-        <table class="size-grid" style="margin-top:8px">
-          <tr><th>Min Qty</th><th>Max Qty</th><th>Item Cost</th><th>Run Charge</th><th>Sell Override</th><th>Calc Sell</th><th></th></tr>
-          ${form.priceBreaks.map((brk,i)=>{
-            const bc=computeForBreak(brk);
-            return '<tr>'+
-              '<td><input type="number" value="'+(brk.minQty||'')+'" placeholder="1" onblur="setPriceBreak('+i+',\\'minQty\\',this.value);render()" style="width:65px"></td>'+
-              '<td><input type="number" value="'+(brk.maxQty||'')+'" placeholder="∞" onblur="setPriceBreak('+i+',\\'maxQty\\',this.value);render()" style="width:65px"></td>'+
-              '<td><input type="number" value="'+(brk.itemCost||'')+'" placeholder="'+p(form.itemCostNet).toFixed(2)+'" onblur="setPriceBreak('+i+',\\'itemCost\\',this.value);render()" step="any" style="width:75px"></td>'+
-              '<td><input type="number" value="'+(brk.runCharge||'')+'" placeholder="base" onblur="setPriceBreak('+i+',\\'runCharge\\',this.value);render()" step="any" style="width:75px"></td>'+
-              '<td><input type="number" value="'+(brk.sellOverride||'')+'" placeholder="auto" onblur="setPriceBreak('+i+',\\'sellOverride\\',this.value);render()" step="any" style="width:75px"></td>'+
-              '<td class="sell-val">$'+bc.sellEach.toFixed(2)+'</td>'+
-              '<td><button onclick="removePriceBreak('+i+')" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:14px">×</button></td>'+
-            '</tr>';
-          }).join('')}
-        </table>
-        <button class="btn-add-item" onclick="addPriceBreak()" style="margin-top:8px">+ Add Tier</button>
-        <div style="font-size:10px;color:#7f8c8d;margin-top:6px">Leave Item Cost blank to use base cost. Leave Run Charge blank to use decoration run charges. Leave Sell Override blank for auto-calculation.</div>
-      `:'<div style="font-size:11px;color:#7f8c8d;margin-top:4px;font-style:italic">Enable to set different prices at different order quantities.</div>'}`
+      ${form.hasPriceBreaks==="Yes"?renderPriceBreaksGrid():'<div style="font-size:11px;color:#7f8c8d;margin-top:4px;font-style:italic">Enable to set different prices at different order quantities.</div>'}`
     );
   }
 
