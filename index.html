@@ -53,7 +53,8 @@ textarea{resize:vertical}
 .row{display:grid;gap:12px}
 .row-2{grid-template-columns:1fr 1fr}
 .row-3{grid-template-columns:1fr 1fr 1fr}
-@media(max-width:600px){.row-2,.row-3{grid-template-columns:1fr}}
+.row-4{grid-template-columns:1fr 1fr 1fr 1fr}
+@media(max-width:600px){.row-2,.row-3,.row-4{grid-template-columns:1fr}}
 .toggle-group{display:flex;gap:4px;flex-wrap:wrap}
 .toggle-btn{padding:6px 13px;border-radius:6px;font-size:12px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s}
 .toggle-btn.on{border:2px solid #1a5276;background:#d6eaf8;font-weight:700;color:#1a5276}
@@ -761,6 +762,7 @@ function compute(){
   if(form.shippingUpchargeType==="Flat $")su=p(form.shippingUpchargeAmount);
   else if(form.shippingUpchargeType==="% of Transaction")su=spe*(p(form.shippingUpchargeAmount)/100);
   let fs=spe+su;
+  const sellBeforeSpread=fs;
   // Apply customer spread
   if(form.hasSpread==="Yes"&&p(form.spreadAmount)>0){
     if(form.spreadType==="%")fs=fs*(1+p(form.spreadAmount)/100);
@@ -769,11 +771,14 @@ function compute(){
   // Rounding
   const roundVal=p(form.roundTo)||0.01;
   if(roundVal>=1)fs=Math.ceil(fs/roundVal)*roundVal;
+  // Also round sellBeforeSpread
+  let sbRounded=sellBeforeSpread;
+  if(roundVal>=1)sbRounded=Math.ceil(sbRounded/roundVal)*roundVal;
   const setupSellAuto=p(form.initialSetupCharge)/0.8;
   const pmsSellAuto=p(form.pmsCharge)/0.8;
   const marginWarning=effectiveMf<35;
   return{totalNet:tn,programPrice:pp,inboundFreight:ibf,outboundFreight:obf,receivingFee:rf,pickFee:pf,ccFee:cc,
-    sellPriceEach:spe,sellPricePack:spp,repeatPerPc:rppc,bundlePerPc:bppc,finalSell:fs,
+    sellPriceEach:spe,sellPricePack:spp,repeatPerPc:rppc,bundlePerPc:bppc,finalSell:fs,sellBeforeSpread:sbRounded,
     marginFloor:baseMf,effectiveMargin:effectiveMf,blpUpcharge:blpUp,shippingUpcharge:su,
     freightPct,setupSellAuto,pmsSellAuto,marginWarning,pmsCharge:p(form.pmsCharge),ccRate:ccRate*100};
 }
@@ -902,6 +907,8 @@ function computeProductCompleteness(prod){
 
 // Size grid helpers
 const ALL_SIZES=["XS","S","M","L","XL","2XL","3XL","4XL","5XL"];
+const SIZE_LABELS={"XS":"XS","S":"S","M":"M","L":"L","XL":"XL","2XL":"2X","3XL":"3X","4XL":"4X","5XL":"5X"};
+function sizeLabel(sz){return SIZE_LABELS[sz]||sz;}
 const BASE_SIZES=["XS","S","M","L","XL"];
 function toggleSize(sz){form.sizes[sz].enabled=!form.sizes[sz].enabled;if(!form.sizes[sz].enabled){form.sizes[sz].qty="";form.sizes[sz].upcharge="0";}render();}
 function setSizeField(sz,field,val,silent){form.sizes[sz][field]=val;if(!silent)render();}
@@ -1429,7 +1436,7 @@ async function exportProjectToExcel(){
         const ALL=["XS","S","M","L","XL","2XL","3XL","4XL","5XL"];
         sizeStr=ALL.filter(sz=>form.sizes[sz]?.enabled).map(sz=>{
           const s=form.sizes[sz];
-          return sz+": Qty="+(s.qty||0)+" Par="+(s.par||0)+" Up=$"+(s.upcharge||0);
+          return sizeLabel(sz)+": Qty="+(s.qty||0)+" Par="+(s.par||0)+" Up=$"+(s.upcharge||0);
         }).join("; ");
       }
       rows.push([
@@ -2236,7 +2243,7 @@ function renderForm(app){
           const displaySell=form.sizePricingMode==="Direct Sell Price"&&isUp&&p(s.sellPrice)>0?p(s.sellPrice):autoSell;
           return `<tr class="${isUp&&enabled?'upsize':''}">
             <td><input type="checkbox" ${enabled?'checked':''} onchange="toggleSize('${sz}')"></td>
-            <td class="size-label">${sz}</td>
+            <td class="size-label">${sizeLabel(sz)}</td>
             <td class="cost-val">${enabled?'$'+p(form.itemCostNet).toFixed(2):'-'}</td>
             ${form.singlePriceAllSizes==="No"?(form.sizePricingMode==="Upcharge"?
               '<td>'+(enabled&&isUp?'<input type="number" value="'+(s.upcharge||'')+'" placeholder="0" onblur="setSizeField(\''+sz+'\',\'upcharge\',this.value)" oninput="setSizeField(\''+sz+'\',\'upcharge\',this.value,true)" step="any">':enabled?'\u2014':'-')+'</td><td class="cost-val">'+(enabled?'$'+cost.toFixed(2):'-')+'</td>':
@@ -2251,7 +2258,7 @@ function renderForm(app){
       <div class="size-totals">
         <div class="size-totals-item">Total Units: <strong>${getTotalSizeQty()}</strong></div>
         <div class="size-totals-item">Blended Cost: <strong>$${getBlendedCost().toFixed(2)}</strong></div>
-        <div class="size-totals-item">Sizes: <strong>${getEnabledSizes().join(', ')}</strong></div>
+        <div class="size-totals-item">Sizes: <strong>${getEnabledSizes().map(sizeLabel).join(', ')}</strong></div>
       </div>`):'');
   }
 
@@ -2309,10 +2316,10 @@ function renderForm(app){
       ).join('')}
       ${fld("PMS Match (sell)",mkIn("pmsSell","number",""),{help:p(form.pmsCharge)>0?"Auto: $"+(p(form.pmsCharge)/0.8).toFixed(2):""})}`
     )+(role!=="sales"?crd("Pricing Preview",`Margin: ${compute().effectiveMargin}%`,
-      `<div class="pricing-box"><div class="row row-3">
+      `<div class="pricing-box"><div class="row ${form.hasSpread==='Yes'?'row-4':'row-3'}">
         <div><div class="pricing-label">Net</div><div class="pricing-value">$${c.totalNet.toFixed(2)}</div></div>
         <div><div class="pricing-label">Program</div><div class="pricing-value blue">$${c.programPrice.toFixed(2)}</div></div>
-        <div><div class="pricing-label">Sell</div><div class="pricing-value green">$${c.finalSell.toFixed(2)}</div></div>
+        ${form.hasSpread==='Yes'?'<div><div class="pricing-label">Sell (SB)</div><div class="pricing-value" style="color:#8e44ad">$'+c.sellBeforeSpread.toFixed(2)+'</div></div><div><div class="pricing-label">Sell (Website)</div><div class="pricing-value green">$'+c.finalSell.toFixed(2)+'</div></div>':'<div><div class="pricing-label">Sell</div><div class="pricing-value green">$'+c.finalSell.toFixed(2)+'</div></div>'}
       </div></div>`):'')
     +crd("Quantity Price Breaks","Optional: Set tiered pricing for different order quantities.",
       `${fld("Has Price Breaks?",mkTog("hasPriceBreaks",["Yes","No"]))}
@@ -2334,10 +2341,10 @@ function renderForm(app){
       ${form.shipperAccount==="BLP"&&form.includeInboundFreight==="Yes"?'<div class="row row-2">'+fld("Freight Method",mkTog("inboundFreightMethod",["Category Default","Manual Entry"]))+(form.inboundFreightMethod==="Manual Entry"?fld("Freight Total $",mkIn("inboundFreightTotal","number","")):'')+ '</div><div class="inbound-box"><div class="inbound-label">Inbound/pc: $'+c.inboundFreight.toFixed(4)+(c.outboundFreight>0?' | Outbound/pc: $'+c.outboundFreight.toFixed(4):'')+'</div></div>':''}
       ${form.shipperAccount==="BLP"&&form.includeInboundFreight!=="Yes"?'<div style="font-size:11px;color:#7f8c8d;margin-top:4px;font-style:italic">Freight is off. Programs can enable when applicable.</div>':''}`
     ,"programs")+crd("Pricing with Freight","",
-      `<div class="pricing-box"><div class="row row-3">
+      `<div class="pricing-box"><div class="row ${form.hasSpread==='Yes'?'row-4':'row-3'}">
         <div><div class="pricing-label">Net</div><div class="pricing-value">$${c.totalNet.toFixed(2)}</div></div>
         <div><div class="pricing-label">Program</div><div class="pricing-value blue">$${c.programPrice.toFixed(2)}</div></div>
-        <div><div class="pricing-label">Sell</div><div class="pricing-value green">$${c.finalSell.toFixed(2)}</div></div>
+        ${form.hasSpread==='Yes'?'<div><div class="pricing-label">Sell (SB)</div><div class="pricing-value" style="color:#8e44ad">$'+c.sellBeforeSpread.toFixed(2)+'</div></div><div><div class="pricing-label">Sell (Website)</div><div class="pricing-value green">$'+c.finalSell.toFixed(2)+'</div></div>':'<div><div class="pricing-label">Sell</div><div class="pricing-value green">$'+c.finalSell.toFixed(2)+'</div></div>'}
       </div></div>`);
   }
 
@@ -2481,10 +2488,10 @@ function renderForm(app){
       +rr("Item",form.itemName+" ("+form.vendorItemNum+")")+rr("Color",form.itemColor)+rr("Stock",form.stockStatus)
       +(isApparel()?rr("Sizes",getEnabledSizes().join(", "))+rr("Total Units",String(getTotalSizeQty()))+rr("Blended Cost","$"+getBlendedCost().toFixed(2))+(form.singlePriceAllSizes==="Yes"?rr("Pricing","Single price all sizes"):""):"")
       +form.decorations.map((d,i)=>rr("Deco "+(i+1),(d.method||"")+" @ "+(d.location||"")+(p(d.runCharge)>0?" — Run: $"+p(d.runCharge).toFixed(2)+"/pc":""))).join("")
-    )+crd("Pricing","",`<div class="review-summary"><div class="row row-3">
+    )+crd("Pricing","",`<div class="review-summary"><div class="row ${form.hasSpread==='Yes'?'row-4':'row-3'}">
       <div><div class="pricing-label">Net</div><div class="pricing-value">$${c.totalNet.toFixed(2)}</div></div>
       <div><div class="pricing-label">Program</div><div class="pricing-value blue">$${c.programPrice.toFixed(2)}</div></div>
-      <div><div class="pricing-label">Sell</div><div class="pricing-value green">$${c.finalSell.toFixed(2)}</div></div>
+      ${form.hasSpread==='Yes'?'<div><div class="pricing-label">Sell (SB)</div><div class="pricing-value" style="color:#8e44ad">$'+c.sellBeforeSpread.toFixed(2)+'</div></div><div><div class="pricing-label">Sell (Website)</div><div class="pricing-value green">$'+c.finalSell.toFixed(2)+'</div></div>':'<div><div class="pricing-label">Sell</div><div class="pricing-value green">$'+c.finalSell.toFixed(2)+'</div></div>'}
     </div></div>`+rr("Item Cost","$"+p(form.itemCostNet).toFixed(2))
       +rr("Total Run Charges","$"+form.decorations.reduce((s,d)=>s+p(d.runCharge),0).toFixed(2)+" ("+form.decorations.filter(d=>p(d.runCharge)>0).map((d,i)=>d.location+": $"+p(d.runCharge).toFixed(2)).join(", ")+")")
       +rr("Inbound Freight","$"+c.inboundFreight.toFixed(4))
@@ -2503,7 +2510,7 @@ function renderForm(app){
           const cost=getSizeCost(sz);
           const sell=computeForSize(sz).sellEach;
           const qty=p(s.qty);
-          return '<tr><td class="size-label">'+sz+'</td><td>$'+p(form.itemCostNet).toFixed(2)+'</td><td>'+(isUpsize(sz)?'$'+p(s.upcharge).toFixed(2):'—')+'</td><td>$'+cost.toFixed(2)+'</td><td>'+qty+'</td><td>'+(s.par||'—')+'</td><td class="sell-val">$'+sell.toFixed(2)+'</td><td>$'+(sell*qty).toFixed(2)+'</td></tr>';
+          return '<tr><td class="size-label">'+sizeLabel(sz)+'</td><td>$'+p(form.itemCostNet).toFixed(2)+'</td><td>'+(isUpsize(sz)?'$'+p(s.upcharge).toFixed(2):'—')+'</td><td>$'+cost.toFixed(2)+'</td><td>'+qty+'</td><td>'+(s.par||'—')+'</td><td class="sell-val">$'+sell.toFixed(2)+'</td><td>$'+(sell*qty).toFixed(2)+'</td></tr>';
         }).join('')}
         <tr style="font-weight:700;border-top:2px solid #1a5276"><td>Total</td><td></td><td></td><td></td><td>${getTotalSizeQty()}</td><td></td><td></td><td>$${getEnabledSizes().reduce((s,sz)=>s+computeForSize(sz).sellEach*p(form.sizes[sz].qty),0).toFixed(2)}</td></tr>
       </table>`
