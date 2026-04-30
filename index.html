@@ -698,6 +698,9 @@ function isApparel(){return form.isApparelItem==="Yes";}
 function isInStock(){return form.stockStatus==="In Stock";}
 function getFreightPct(){return isSoftGoods()?0.01:0.10;}
 
+function bundleLabel(c){return c.isBundle?' <span style="font-size:9px;color:#7f8c8d;font-weight:400">('+c.packQty+'pcs/pk)</span>':'';}
+function bundleSub(c){return c.isBundle?'<div style="font-size:9px;color:#95a5a6;margin-top:2px">$'+c.finalSell.toFixed(2)+'/ea × '+c.packQty+'</div>':'';}
+
 function setVal(key,val,silent){
   if(role==="admin"&&form[key]!==undefined&&form[key]!==val)modified[key]=true;
   form[key]=val;
@@ -777,10 +780,15 @@ function compute(){
   const setupSellAuto=p(form.initialSetupCharge)/0.8;
   const pmsSellAuto=p(form.pmsCharge)/0.8;
   const marginWarning=effectiveMf<35;
+  // Bundle-aware pricing: when sold as Pack, multiply per-piece prices by pack qty
+  const packQty=form.soldAs==="Pack"?(p(form.qtyPerPack)||1):1;
+  const isBundle=packQty>1;
+  const displayNet=tn*packQty,displayProgram=pp*packQty,displaySell=fs*packQty,displaySellSB=sbRounded*packQty;
   return{totalNet:tn,programPrice:pp,inboundFreight:ibf,outboundFreight:obf,receivingFee:rf,pickFee:pf,ccFee:cc,
     sellPriceEach:spe,sellPricePack:spp,repeatPerPc:rppc,bundlePerPc:bppc,finalSell:fs,sellBeforeSpread:sbRounded,
     marginFloor:baseMf,effectiveMargin:effectiveMf,blpUpcharge:blpUp,shippingUpcharge:su,
-    freightPct,setupSellAuto,pmsSellAuto,marginWarning,pmsCharge:p(form.pmsCharge),ccRate:ccRate*100};
+    freightPct,setupSellAuto,pmsSellAuto,marginWarning,pmsCharge:p(form.pmsCharge),ccRate:ccRate*100,
+    isBundle,packQty,displayNet,displayProgram,displaySell,displaySellSB};
 }
 
 // ============================================================
@@ -2315,11 +2323,11 @@ function renderForm(app){
         '<div class="row row-2"><div class="field"><label class="field-label">Deco '+(i+1)+' Setup Sell'+(dec.method?' — '+dec.method:'')+'</label><input type="number" value="'+(dec.setupSell||'')+'" onchange="setDeco('+i+',\'setupSell\',this.value)" placeholder="'+(p(dec.setupCost||form.initialSetupCharge)/0.8).toFixed(2)+'"><div class="field-help">Auto: $'+(p(dec.setupCost||form.initialSetupCharge)/0.8).toFixed(2)+'</div></div><div></div></div>'
       ).join('')}
       ${fld("PMS Match (sell)",mkIn("pmsSell","number",""),{help:p(form.pmsCharge)>0?"Auto: $"+(p(form.pmsCharge)/0.8).toFixed(2):""})}`
-    )+(role!=="sales"?crd("Pricing Preview",`Margin: ${compute().effectiveMargin}%`,
+    )+(role!=="sales"?crd("Pricing Preview",`Margin: ${compute().effectiveMargin}%`+(c.isBundle?' — Per Pack ('+c.packQty+'pcs)':''),
       `<div class="pricing-box"><div class="row ${form.hasSpread==='Yes'?'row-4':'row-3'}">
-        <div><div class="pricing-label">Net</div><div class="pricing-value">$${c.totalNet.toFixed(2)}</div></div>
-        <div><div class="pricing-label">Program</div><div class="pricing-value blue">$${c.programPrice.toFixed(2)}</div></div>
-        ${form.hasSpread==='Yes'?'<div><div class="pricing-label">Sell (SB)</div><div class="pricing-value" style="color:#8e44ad">$'+c.sellBeforeSpread.toFixed(2)+'</div></div><div><div class="pricing-label">Sell (Website)</div><div class="pricing-value green">$'+c.finalSell.toFixed(2)+'</div></div>':'<div><div class="pricing-label">Sell</div><div class="pricing-value green">$'+c.finalSell.toFixed(2)+'</div></div>'}
+        <div><div class="pricing-label">Net${bundleLabel(c)}</div><div class="pricing-value">$${c.displayNet.toFixed(2)}</div></div>
+        <div><div class="pricing-label">Program${bundleLabel(c)}</div><div class="pricing-value blue">$${c.displayProgram.toFixed(2)}</div></div>
+        ${form.hasSpread==='Yes'?'<div><div class="pricing-label">Sell (SB)'+bundleLabel(c)+'</div><div class="pricing-value" style="color:#8e44ad">$'+c.displaySellSB.toFixed(2)+'</div>'+bundleSub(c)+'</div><div><div class="pricing-label">Sell (Website)'+bundleLabel(c)+'</div><div class="pricing-value green">$'+c.displaySell.toFixed(2)+'</div>'+bundleSub(c)+'</div>':'<div><div class="pricing-label">Sell'+bundleLabel(c)+'</div><div class="pricing-value green">$'+c.displaySell.toFixed(2)+'</div>'+bundleSub(c)+'</div>'}
       </div></div>`):'')
     +crd("Quantity Price Breaks","Optional: Set tiered pricing for different order quantities.",
       `${fld("Has Price Breaks?",mkTog("hasPriceBreaks",["Yes","No"]))}
@@ -2340,11 +2348,11 @@ function renderForm(app){
       ${form.shipperAccount==="BLP"?fld("Include Freight?",mkTog("includeInboundFreight",["Yes","No"]),{owner:"programs"}):''}
       ${form.shipperAccount==="BLP"&&form.includeInboundFreight==="Yes"?'<div class="row row-2">'+fld("Freight Method",mkTog("inboundFreightMethod",["Category Default","Manual Entry"]))+(form.inboundFreightMethod==="Manual Entry"?fld("Freight Total $",mkIn("inboundFreightTotal","number","")):'')+ '</div><div class="inbound-box"><div class="inbound-label">Inbound/pc: $'+c.inboundFreight.toFixed(4)+(c.outboundFreight>0?' | Outbound/pc: $'+c.outboundFreight.toFixed(4):'')+'</div></div>':''}
       ${form.shipperAccount==="BLP"&&form.includeInboundFreight!=="Yes"?'<div style="font-size:11px;color:#7f8c8d;margin-top:4px;font-style:italic">Freight is off. Programs can enable when applicable.</div>':''}`
-    ,"programs")+crd("Pricing with Freight","",
+    ,"programs")+crd("Pricing with Freight",c.isBundle?'Per Pack ('+c.packQty+'pcs)':'',
       `<div class="pricing-box"><div class="row ${form.hasSpread==='Yes'?'row-4':'row-3'}">
-        <div><div class="pricing-label">Net</div><div class="pricing-value">$${c.totalNet.toFixed(2)}</div></div>
-        <div><div class="pricing-label">Program</div><div class="pricing-value blue">$${c.programPrice.toFixed(2)}</div></div>
-        ${form.hasSpread==='Yes'?'<div><div class="pricing-label">Sell (SB)</div><div class="pricing-value" style="color:#8e44ad">$'+c.sellBeforeSpread.toFixed(2)+'</div></div><div><div class="pricing-label">Sell (Website)</div><div class="pricing-value green">$'+c.finalSell.toFixed(2)+'</div></div>':'<div><div class="pricing-label">Sell</div><div class="pricing-value green">$'+c.finalSell.toFixed(2)+'</div></div>'}
+        <div><div class="pricing-label">Net${bundleLabel(c)}</div><div class="pricing-value">$${c.displayNet.toFixed(2)}</div></div>
+        <div><div class="pricing-label">Program${bundleLabel(c)}</div><div class="pricing-value blue">$${c.displayProgram.toFixed(2)}</div></div>
+        ${form.hasSpread==='Yes'?'<div><div class="pricing-label">Sell (SB)'+bundleLabel(c)+'</div><div class="pricing-value" style="color:#8e44ad">$'+c.displaySellSB.toFixed(2)+'</div>'+bundleSub(c)+'</div><div><div class="pricing-label">Sell (Website)'+bundleLabel(c)+'</div><div class="pricing-value green">$'+c.displaySell.toFixed(2)+'</div>'+bundleSub(c)+'</div>':'<div><div class="pricing-label">Sell'+bundleLabel(c)+'</div><div class="pricing-value green">$'+c.displaySell.toFixed(2)+'</div>'+bundleSub(c)+'</div>'}
       </div></div>`);
   }
 
@@ -2449,13 +2457,13 @@ function renderForm(app){
     ,"admin")+crd("Website Description","",
       `${fld("Website Description",'<textarea id="websiteDescription" rows="3" onblur="setVal(\'websiteDescription\',this.value)">'+(form.websiteDescription||'')+'</textarea>',{owner:"programs"})}
       ${form.itemDescription?'<div class="inbound-box"><div class="inbound-label">Sales Draft:</div><div style="font-size:11px;margin-top:3px">'+form.itemDescription+'</div></div>':''}`
-    ,"programs")+crd("Pricing","",
+    ,"programs")+crd("Pricing",c.isBundle?'Per Pack ('+c.packQty+' pcs)':'',
       `<div class="row row-3">
-        ${fld("Website Price",mkIn("currentWebsitePrice","number",c.finalSell.toFixed(2)),{owner:"admin"})}
+        ${fld("Website Price",mkIn("currentWebsitePrice","number",c.displaySell.toFixed(2)),{owner:"admin",help:c.isBundle?'Pack price ('+c.packQty+'pcs × $'+c.finalSell.toFixed(2)+'/ea)':''})}
         ${fld("SB Eaches",mkIn("sbPriceEaches","number",c.sellPriceEach.toFixed(2)),{owner:"admin"})}
         ${fld("SB Packs",mkIn("sbPricePacks","number",c.sellPricePack.toFixed(2)),{owner:"admin"})}
       </div>
-      ${fld("Final Sell SB",mkIn("finalSellSB","number",c.finalSell.toFixed(2)),{owner:"admin"})}
+      ${fld("Final Sell SB",mkIn("finalSellSB","number",c.displaySell.toFixed(2)),{owner:"admin",help:c.isBundle?'Pack price ('+c.packQty+'pcs × $'+c.finalSell.toFixed(2)+'/ea)':''})}
       <div class="row row-2">
         ${fld("OMG Sell",mkIn("omgSell","number","0"),{owner:"admin"})}
         ${fld("OMG Cost",mkIn("omgCost","number","0"),{owner:"admin"})}
@@ -2488,11 +2496,14 @@ function renderForm(app){
       +rr("Item",form.itemName+" ("+form.vendorItemNum+")")+rr("Color",form.itemColor)+rr("Stock",form.stockStatus)
       +(isApparel()?rr("Sizes",getEnabledSizes().join(", "))+rr("Total Units",String(getTotalSizeQty()))+rr("Blended Cost","$"+getBlendedCost().toFixed(2))+(form.singlePriceAllSizes==="Yes"?rr("Pricing","Single price all sizes"):""):"")
       +form.decorations.map((d,i)=>rr("Deco "+(i+1),(d.method||"")+" @ "+(d.location||"")+(p(d.runCharge)>0?" — Run: $"+p(d.runCharge).toFixed(2)+"/pc":""))).join("")
-    )+crd("Pricing","",`<div class="review-summary"><div class="row ${form.hasSpread==='Yes'?'row-4':'row-3'}">
-      <div><div class="pricing-label">Net</div><div class="pricing-value">$${c.totalNet.toFixed(2)}</div></div>
-      <div><div class="pricing-label">Program</div><div class="pricing-value blue">$${c.programPrice.toFixed(2)}</div></div>
-      ${form.hasSpread==='Yes'?'<div><div class="pricing-label">Sell (SB)</div><div class="pricing-value" style="color:#8e44ad">$'+c.sellBeforeSpread.toFixed(2)+'</div></div><div><div class="pricing-label">Sell (Website)</div><div class="pricing-value green">$'+c.finalSell.toFixed(2)+'</div></div>':'<div><div class="pricing-label">Sell</div><div class="pricing-value green">$'+c.finalSell.toFixed(2)+'</div></div>'}
-    </div></div>`+rr("Item Cost","$"+p(form.itemCostNet).toFixed(2))
+      +(form.soldAs==="Pack"&&p(form.qtyPerPack)>1?rr("Sold As","Pack of "+form.qtyPerPack):"")
+    )+crd("Pricing",c.isBundle?'Per Pack ('+c.packQty+' pcs)':'',`<div class="review-summary"><div class="row ${form.hasSpread==='Yes'?'row-4':'row-3'}">
+      <div><div class="pricing-label">Net${bundleLabel(c)}</div><div class="pricing-value">$${c.displayNet.toFixed(2)}</div>${c.isBundle?'<div style="font-size:9px;color:#95a5a6">$'+c.totalNet.toFixed(2)+'/ea</div>':''}</div>
+      <div><div class="pricing-label">Program${bundleLabel(c)}</div><div class="pricing-value blue">$${c.displayProgram.toFixed(2)}</div>${c.isBundle?'<div style="font-size:9px;color:#95a5a6">$'+c.programPrice.toFixed(2)+'/ea</div>':''}</div>
+      ${form.hasSpread==='Yes'?'<div><div class="pricing-label">Sell (SB)'+bundleLabel(c)+'</div><div class="pricing-value" style="color:#8e44ad">$'+c.displaySellSB.toFixed(2)+'</div>'+(c.isBundle?'<div style="font-size:9px;color:#95a5a6">$'+c.sellBeforeSpread.toFixed(2)+'/ea</div>':'')+'</div><div><div class="pricing-label">Sell (Website)'+bundleLabel(c)+'</div><div class="pricing-value green">$'+c.displaySell.toFixed(2)+'</div>'+(c.isBundle?'<div style="font-size:9px;color:#95a5a6">$'+c.finalSell.toFixed(2)+'/ea</div>':'')+'</div>':'<div><div class="pricing-label">Sell'+bundleLabel(c)+'</div><div class="pricing-value green">$'+c.displaySell.toFixed(2)+'</div>'+(c.isBundle?'<div style="font-size:9px;color:#95a5a6">$'+c.finalSell.toFixed(2)+'/ea</div>':'')+'</div>'}
+    </div></div>`
+      +(c.isBundle?rr("Sold As","Pack of "+c.packQty):'')
+      +rr("Item Cost","$"+p(form.itemCostNet).toFixed(2))
       +rr("Total Run Charges","$"+form.decorations.reduce((s,d)=>s+p(d.runCharge),0).toFixed(2)+" ("+form.decorations.filter(d=>p(d.runCharge)>0).map((d,i)=>d.location+": $"+p(d.runCharge).toFixed(2)).join(", ")+")")
       +rr("Inbound Freight","$"+c.inboundFreight.toFixed(4))
       +(c.outboundFreight>0?rr("Outbound Freight","$"+c.outboundFreight.toFixed(4)):'')
