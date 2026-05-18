@@ -505,6 +505,8 @@ function formToSPFields(){
     BLPWebsiteNum:form.blpWebsiteItemNum,
     WebsiteDescription:form.websiteDescription,
     CurrentWebsitePrice:p(form.currentWebsitePrice)||null,
+    FinalWebsitePrice:p(form.finalWebsitePrice)||null,
+    WebsiteSpreadPct:p(form.websiteSpreadPct)||null,
     SBPriceEaches:p(form.sbPriceEaches)||null,
     SBPricePacks:p(form.sbPricePacks)||null,
     OMGSell:p(form.omgSell)||null,
@@ -591,6 +593,8 @@ function spFieldsToForm(sp){
   form.blpWebsiteItemNum=sp.BLPWebsiteNum||"";
   form.websiteDescription=sp.WebsiteDescription||"";
   form.currentWebsitePrice=sp.CurrentWebsitePrice!=null?String(sp.CurrentWebsitePrice):"";
+  form.finalWebsitePrice=sp.FinalWebsitePrice!=null?String(sp.FinalWebsitePrice):"";
+  form.websiteSpreadPct=sp.WebsiteSpreadPct!=null?String(sp.WebsiteSpreadPct):"";
   form.sbPriceEaches=sp.SBPriceEaches!=null?String(sp.SBPriceEaches):"";
   form.sbPricePacks=sp.SBPricePacks!=null?String(sp.SBPricePacks):"";
   form.omgSell=sp.OMGSell!=null?String(sp.OMGSell):"";
@@ -632,13 +636,12 @@ function spFieldsToForm(sp){
     form.marginFloor=currentProject.MarginFloor!=null?String(currentProject.MarginFloor):"40";
     form.blpOwnershipUpcharge=currentProject.BLPUpchargePct!=null?String(currentProject.BLPUpchargePct):"15";
     form.hasSpread=currentProject.HasSpread||"No";
-    form.spreadAmount=currentProject.SpreadAmount||"";
-    form.spreadType=currentProject.SpreadType||"$";
+    form.spreadAmount=currentProject.SpreadAmount!=null?String(currentProject.SpreadAmount):"5";
     form.shippingUpchargeType=currentProject.ShipUpchargeType||"None";
     form.shippingUpchargeAmount=currentProject.ShipUpchargeAmount!=null?String(currentProject.ShipUpchargeAmount):"";
     form.clientSuppliedStock=currentProject.ClientSuppliedStock||"No";
     form.merchantAccount=currentProject.MerchantAccount||"Client";
-    form.ccFeePct=currentProject.CCFeePct!=null?String(currentProject.CCFeePct):"3.25";
+    form.ccFeePct=currentProject.CCFeePct!=null?String(currentProject.CCFeePct):"3.2";
     form.shipperAccount=currentProject.ShipperAccount||"BLP";
     form.rollSetupIntoPrice=currentProject.RollSetUpIntoPrice||"No";
     form.roundTo=currentProject.RoundTo||"0.01";
@@ -651,9 +654,9 @@ function spFieldsToForm(sp){
 function getDefaults(){
   return{
     submissionType:"Standard Product",
-    programOwnership:"Client Owned",marginFloor:"40",blpOwnershipUpcharge:"15",hasSpread:"No",spreadType:"$",spreadAmount:"",
+    programOwnership:"Client Owned",marginFloor:"40",blpOwnershipUpcharge:"15",hasSpread:"No",spreadAmount:"5",
     shippingUpchargeType:"None",shippingUpchargeAmount:"",clientSuppliedStock:"No",
-    merchantAccount:"Client",ccFeePct:"3.25",
+    merchantAccount:"Client",ccFeePct:"3.2",
     shipperAccount:"BLP",freightScenario:"Blank to Decorator",
     rollSetupIntoPrice:"No",
     roundTo:"0.01",
@@ -675,7 +678,7 @@ function getDefaults(){
     productURL:"",coopNum:"",standardLeadTime:"",is24HrAvailable:"No",
     lowParLevel:"",notes:"",
     finalSellSB:"",pmsSell:"",
-    blpWebsiteItemNum:"",websiteDescription:"",currentWebsitePrice:"",
+    blpWebsiteItemNum:"",websiteDescription:"",currentWebsitePrice:"",finalWebsitePrice:"",websiteSpreadPct:"",
     sbPriceEaches:"",sbPricePacks:"",omgSell:"",omgCost:"",
     submissionStatus:"Draft",
     // Apparel size grid
@@ -696,27 +699,7 @@ function p(v){return parseFloat(v)||0;}
 function isSoftGoods(){return SOFT_GOODS.includes(form.websiteCategory==="Other"?form.customCategory:form.websiteCategory);}
 function isApparel(){return form.isApparelItem==="Yes";}
 function isInStock(){return form.stockStatus==="In Stock";}
-// NEW fee schedule (May 2026) — tiered by total net cost per piece
-function getFreightPerPc(totalNet){
-  if(totalNet<=1.20)return 0.06;
-  if(totalNet<=2.99)return 0.11;
-  if(totalNet<=5.99)return 0.20;
-  if(totalNet<=14.99)return 0.44;
-  if(totalNet<=59.99)return 0.70;
-  return 1.50;
-}
-// Rec fee and pick fee — both identical, tiered by program price
-function getRecFee(pp){
-  if(pp<=1.99)return 0.15;
-  if(pp<=4.99)return 0.20;
-  if(pp<=24.99)return 0.30;
-  if(pp<=99.99)return 0.50;
-  return 0.75;
-}
-function getPickFee(pp){return getRecFee(pp);}
-
-function bundleLabel(c){return c.isBundle?' <span style="font-size:9px;color:#7f8c8d;font-weight:400">('+c.packQty+'pcs/pk)</span>':'';}
-function bundleSub(c){return c.isBundle?'<div style="font-size:9px;color:#95a5a6;margin-top:2px">$'+c.finalSell.toFixed(2)+'/ea × '+c.packQty+'</div>':'';}
+function getFreightPct(){return isSoftGoods()?0.01:0.10;}
 
 function setVal(key,val,silent){
   if(role==="admin"&&form[key]!==undefined&&form[key]!==val)modified[key]=true;
@@ -752,27 +735,31 @@ function compute(){
   const baseMf=p(form.marginFloor)||40,
     blpUp=form.programOwnership==="BLP Owned"?(p(form.blpOwnershipUpcharge)||15):0,
     effectiveMf=baseMf+blpUp,md=(100-effectiveMf)/100;
-  const freightAmt=getFreightPerPc(tn);
+  const freightPct=getFreightPct();
   let ibf=0,obf=0;
   // Freight logic based on shipper account and scenario
   if(form.shipperAccount==="Client"){
     ibf=0;obf=0; // Client shipper = no freight
   }else if(isInStock()){
-    // In Stock: both inbound and outbound apply (new May 2026 schedule)
-    const manualPc=form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):0;
-    const autoFreight=freightAmt/qp;
-    const fval=form.includeInboundFreight==="Yes"?(manualPc>0?manualPc:autoFreight):0;
-    ibf=fval;obf=fval;
+    if(form.freightScenario==="Pre-decorated at Supplier"){
+      // Only outbound (supplier to warehouse), no inbound
+      ibf=0;
+      obf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct):0;
+    }else{
+      // Blank to decorator: both inbound and outbound
+      ibf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct):0;
+      obf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct):0;
+    }
   }else{
     // On Demand: inbound only if blank to decorator
     if(form.freightScenario==="Blank to Decorator"){
-      ibf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):freightAmt/qp):0;
+      ibf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct):0;
     }
     obf=0; // Never outbound for on-demand
   }
   const pp=md>0?(tn+ibf+obf)/md:0,
-    rf=isInStock()?getRecFee(pp)/qp:0,pf=isInStock()?getPickFee(pp)/qp:0,
-    ccRate=form.merchantAccount==="BLP"?(p(form.ccFeePct)||3.25)/100:0,
+    rf=isInStock()?0.16/qp:0,pf=isInStock()?(pp<=9.99?.15:pp<=24.99?.30:.45)/qp:0,
+    ccRate=form.merchantAccount==="BLP"?(p(form.ccFeePct)||3.2)/100:0,
     cc=pp*ccRate,spe=pp+rf+pf+cc,spp=spe*qp;
   let su=0;
   if(form.shippingUpchargeType==="Flat $")su=p(form.shippingUpchargeAmount);
@@ -781,8 +768,7 @@ function compute(){
   const sellBeforeSpread=fs;
   // Apply customer spread
   if(form.hasSpread==="Yes"&&p(form.spreadAmount)>0){
-    if(form.spreadType==="%")fs=fs*(1+p(form.spreadAmount)/100);
-    else fs=fs+p(form.spreadAmount);
+    fs=fs*(1+p(form.spreadAmount)/100);
   }
   // Rounding
   const roundVal=p(form.roundTo)||0.01;
@@ -793,15 +779,10 @@ function compute(){
   const setupSellAuto=p(form.initialSetupCharge)/0.8;
   const pmsSellAuto=p(form.pmsCharge)/0.8;
   const marginWarning=effectiveMf<35;
-  // Bundle-aware pricing: when sold as Pack, multiply per-piece prices by pack qty
-  const packQty=form.soldAs==="Pack"?(p(form.qtyPerPack)||1):1;
-  const isBundle=packQty>1;
-  const displayNet=tn*packQty,displayProgram=pp*packQty,displaySell=fs*packQty,displaySellSB=sbRounded*packQty;
   return{totalNet:tn,programPrice:pp,inboundFreight:ibf,outboundFreight:obf,receivingFee:rf,pickFee:pf,ccFee:cc,
     sellPriceEach:spe,sellPricePack:spp,repeatPerPc:rppc,bundlePerPc:bppc,finalSell:fs,sellBeforeSpread:sbRounded,
     marginFloor:baseMf,effectiveMargin:effectiveMf,blpUpcharge:blpUp,shippingUpcharge:su,
-    freightAmt,setupSellAuto,pmsSellAuto,marginWarning,pmsCharge:p(form.pmsCharge),ccRate:ccRate*100,
-    isBundle,packQty,displayNet,displayProgram,displaySell,displaySellSB};
+    freightPct,setupSellAuto,pmsSellAuto,marginWarning,pmsCharge:p(form.pmsCharge),ccRate:ccRate*100};
 }
 
 // ============================================================
@@ -954,32 +935,34 @@ function computeForSize(sz){
   const baseMf=p(form.marginFloor)||40,
     blpUp=form.programOwnership==="BLP Owned"?(p(form.blpOwnershipUpcharge)||15):0,
     effectiveMf=baseMf+blpUp,md=(100-effectiveMf)/100;
-  const freightAmt=getFreightPerPc(tn);
+  const freightPct=getFreightPct();
   let ibf=0,obf=0;
   if(form.shipperAccount==="Client"){
     ibf=0;obf=0;
   }else if(isInStock()){
-    const manualPc=form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):0;
-    const autoFreight=freightAmt/qp;
-    const fval=form.includeInboundFreight==="Yes"?(manualPc>0?manualPc:autoFreight):0;
-    ibf=fval;obf=fval;
+    if(form.freightScenario==="Pre-decorated at Supplier"){
+      ibf=0;
+      obf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct):0;
+    }else{
+      ibf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct):0;
+      obf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct):0;
+    }
   }else{
     if(form.freightScenario==="Blank to Decorator"){
-      ibf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):freightAmt/qp):0;
+      ibf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct):0;
     }
     obf=0;
   }
   const pp=md>0?(tn+ibf+obf)/md:0,
-    rf=isInStock()?getRecFee(pp)/qp:0,pf=isInStock()?getPickFee(pp)/qp:0,
-    ccRate=form.merchantAccount==="BLP"?(p(form.ccFeePct)||3.25)/100:0,
+    rf=isInStock()?0.16/qp:0,pf=isInStock()?(pp<=9.99?.15:pp<=24.99?.30:.45)/qp:0,
+    ccRate=form.merchantAccount==="BLP"?(p(form.ccFeePct)||3.2)/100:0,
     cc=pp*ccRate,spe=pp+rf+pf+cc;
   let su=0;
   if(form.shippingUpchargeType==="Flat $")su=p(form.shippingUpchargeAmount);
   else if(form.shippingUpchargeType==="% of Transaction")su=spe*(p(form.shippingUpchargeAmount)/100);
   let fs=spe+su;
   if(form.hasSpread==="Yes"&&p(form.spreadAmount)>0){
-    if(form.spreadType==="%")fs=fs*(1+p(form.spreadAmount)/100);
-    else fs=fs+p(form.spreadAmount);
+    fs=fs*(1+p(form.spreadAmount)/100);
   }
   const roundVal=p(form.roundTo)||0.01;
   if(roundVal>=1)fs=Math.ceil(fs/roundVal)*roundVal;
@@ -1033,80 +1016,35 @@ function computeForBreak(brk){
   const baseMf=p(form.marginFloor)||40;
   const blpUp=form.programOwnership==="BLP Owned"?(p(form.blpOwnershipUpcharge)||15):0;
   const effectiveMf=baseMf+blpUp,md=(100-effectiveMf)/100;
-  const freightAmt=getFreightPerPc(tn);
+  const freightPct=getFreightPct();
   let ibf=0,obf=0;
   if(form.shipperAccount==="Client"){ibf=0;obf=0;}
   else if(isInStock()){
-    const manualPc=form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):0;
-    const autoFreight=freightAmt/qp;
-    const fval=form.includeInboundFreight==="Yes"?(manualPc>0?manualPc:autoFreight):0;
-    ibf=fval;obf=fval;
+    if(form.freightScenario==="Pre-decorated at Supplier"){
+      ibf=0;obf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct):0;
+    }else{
+      ibf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct):0;
+      obf=ibf;
+    }
   }else{
-    if(form.freightScenario==="Blank to Decorator")ibf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):freightAmt/qp):0;
+    if(form.freightScenario==="Blank to Decorator")ibf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct):0;
     obf=0;
   }
   const pp=md>0?(tn+ibf+obf)/md:0;
-  const rf=isInStock()?getRecFee(pp)/qp:0,pf=isInStock()?getPickFee(pp)/qp:0;
-  const ccRate=form.merchantAccount==="BLP"?(p(form.ccFeePct)||3.25)/100:0;
+  const rf=isInStock()?0.16/qp:0,pf=isInStock()?(pp<=9.99?.15:pp<=24.99?.30:.45)/qp:0;
+  const ccRate=form.merchantAccount==="BLP"?(p(form.ccFeePct)||3.2)/100:0;
   const cc=pp*ccRate,spe=pp+rf+pf+cc;
   let su=0;
   if(form.shippingUpchargeType==="Flat $")su=p(form.shippingUpchargeAmount);
   else if(form.shippingUpchargeType==="% of Transaction")su=spe*(p(form.shippingUpchargeAmount)/100);
   let fs=spe+su;
   if(form.hasSpread==="Yes"&&p(form.spreadAmount)>0){
-    if(form.spreadType==="%")fs=fs*(1+p(form.spreadAmount)/100);
-    else fs=fs+p(form.spreadAmount);
+    fs=fs*(1+p(form.spreadAmount)/100);
   }
   const roundVal=p(form.roundTo)||0.01;
   if(roundVal>=1)fs=Math.ceil(fs/roundVal)*roundVal;
   // Allow sell override
   if(p(brk.sellOverride)>0)fs=p(brk.sellOverride);
-  return{itemCost:ic,totalNet:tn,programPrice:pp,sellEach:fs};
-}
-// Compute pricing for a specific break tier + specific apparel size
-function computeForBreakAndSize(brk,sz){
-  const baseIc=p(brk.itemCost)||p(form.itemCostNet);
-  const upcharge=(form.singlePriceAllSizes==="Yes")?0:p(form.sizes[sz].upcharge);
-  const ic=baseIc+upcharge;
-  const rc=p(brk.runCharge)>=0&&brk.runCharge!==""?p(brk.runCharge):form.decorations.reduce((s,d)=>s+p(d.runCharge),0)||p(form.runCharge);
-  const rca=p(form.runChargeAddlLocation);
-  const fq=p(brk.minQty)||1;
-  const rs=p(form.repeatSetup);
-  const rppc=form.rollSetupIntoPrice==="Yes"&&fq>0?rs/fq:0;
-  const fp=p(form.foldingPolybag),st=p(form.shirtSizeSticker);
-  const bf=p(form.bundleFeePerPack),qp=p(form.qtyPerPack)||1,bppc=qp>0?bf/qp:0;
-  const masterCarton=form.shipsIn==="Master Carton"?p(form.masterCartonCost):0;
-  const customPkgUnit=form.customPackaging==="Yes"?p(form.customPkgUnitCost):0;
-  const tn=ic+rc+rca+rppc+fp+st+bppc+masterCarton+customPkgUnit;
-  const baseMf=p(form.marginFloor)||40;
-  const blpUp=form.programOwnership==="BLP Owned"?(p(form.blpOwnershipUpcharge)||15):0;
-  const effectiveMf=baseMf+blpUp,md=(100-effectiveMf)/100;
-  const freightAmt=getFreightPerPc(tn);
-  let ibf=0,obf=0;
-  if(form.shipperAccount==="Client"){ibf=0;obf=0;}
-  else if(isInStock()){
-    const manualPc=form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):0;
-    const autoFreight=freightAmt/qp;
-    const fval=form.includeInboundFreight==="Yes"?(manualPc>0?manualPc:autoFreight):0;
-    ibf=fval;obf=fval;
-  }else{
-    if(form.freightScenario==="Blank to Decorator")ibf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):freightAmt/qp):0;
-    obf=0;
-  }
-  const pp=md>0?(tn+ibf+obf)/md:0;
-  const rf=isInStock()?getRecFee(pp)/qp:0,pf=isInStock()?getPickFee(pp)/qp:0;
-  const ccRate=form.merchantAccount==="BLP"?(p(form.ccFeePct)||3.25)/100:0;
-  const cc=pp*ccRate,spe=pp+rf+pf+cc;
-  let su=0;
-  if(form.shippingUpchargeType==="Flat $")su=p(form.shippingUpchargeAmount);
-  else if(form.shippingUpchargeType==="% of Transaction")su=spe*(p(form.shippingUpchargeAmount)/100);
-  let fs=spe+su;
-  if(form.hasSpread==="Yes"&&p(form.spreadAmount)>0){
-    if(form.spreadType==="%")fs=fs*(1+p(form.spreadAmount)/100);
-    else fs=fs+p(form.spreadAmount);
-  }
-  const roundVal=p(form.roundTo)||0.01;
-  if(roundVal>=1)fs=Math.ceil(fs/roundVal)*roundVal;
   return{itemCost:ic,totalNet:tn,programPrice:pp,sellEach:fs};
 }
 function getBlendedCost(){
@@ -1371,8 +1309,7 @@ function startNewProduct(){
     form.marginFloor=currentProject.MarginFloor!=null?String(currentProject.MarginFloor):"40";
     form.blpOwnershipUpcharge=currentProject.BLPUpchargePct!=null?String(currentProject.BLPUpchargePct):"15";
     form.hasSpread=currentProject.HasSpread||"No";
-    form.spreadAmount=currentProject.SpreadAmount||"";
-    form.spreadType=currentProject.SpreadType||"$";
+    form.spreadAmount=currentProject.SpreadAmount!=null?String(currentProject.SpreadAmount):"5";
     form.shippingUpchargeType=currentProject.ShipUpchargeType||"None";
     form.shippingUpchargeAmount=currentProject.ShipUpchargeAmount!=null?String(currentProject.ShipUpchargeAmount):"";
     form.clientSuppliedStock=currentProject.ClientSuppliedStock||"No";
@@ -1486,7 +1423,7 @@ async function exportProjectToExcel(){
         form.marginFloor=proj.MarginFloor!=null?String(proj.MarginFloor):"40";
         form.blpOwnershipUpcharge=proj.BLPUpchargePct!=null?String(proj.BLPUpchargePct):"15";
         form.merchantAccount=proj.MerchantAccount||"Client";
-        form.ccFeePct=proj.CCFeePct!=null?String(proj.CCFeePct):"3.25";
+        form.ccFeePct=proj.CCFeePct!=null?String(proj.CCFeePct):"3.2";
         form.shipperAccount=proj.ShipperAccount||"BLP";
         form.rollSetupIntoPrice=proj.RollSetUpIntoPrice||"No";
         form.roundTo=proj.RoundTo||"0.01";
@@ -2047,13 +1984,17 @@ function renderNewProject(app){
         <div class="field-help">Only applies when BLP Owned is selected.</div></div>
       <div class="field"><label class="field-label">Merchant Account</label>
         <select id="npMerchant"><option value="Client" selected>Client Processes CC</option><option value="BLP">BLP Processes CC</option><option value="No CC">No CC Transactions</option></select></div>
-      <div class="field"><label class="field-label">CC Fee % <span style="font-weight:400;color:#7f8c8d">(only when BLP processes)</span></label><input type="number" id="npCCFee" value="3.25" step="0.1" min="2.9" placeholder="3.25"></div>
+      <div class="field"><label class="field-label">CC Fee % <span style="font-weight:400;color:#7f8c8d">(only when BLP processes)</span></label><input type="number" id="npCCFee" value="3.25" step="0.05" min="2.9" placeholder="3.25"></div>
       <div class="field"><label class="field-label">Shipper Account</label>
         <select id="npShipper"><option value="BLP" selected>BLP Shipper</option><option value="Client">Client Shipper</option></select></div>
       <div class="field"><label class="field-label">Roll Setup Into Unit Price?</label>
         <select id="npRollSetup"><option value="No" selected>No — Charge Separately</option><option value="Yes">Yes — Include in Unit Price</option></select></div>
       <div class="field"><label class="field-label">Round Sell Price To</label>
         <select id="npRoundTo"><option value="0.01" selected>Nearest $0.01</option><option value="0.50">Nearest $0.50</option><option value="1.00">Nearest $1.00</option><option value="5.00">Nearest $5.00</option></select></div>
+      <div class="field"><label class="field-label">Customer Spread</label>
+        <select id="npHasSpread"><option value="No" selected>No</option><option value="Yes">Yes</option></select></div>
+      <div class="field"><label class="field-label">Spread % <span style="font-weight:400;color:#7f8c8d">(when spread is Yes)</span></label>
+        <select id="npSpreadAmount"><option value="0">0% — No Spread</option><option value="2">2% — Conservative</option><option value="3">3%</option><option value="5" selected>5% — Default</option><option value="10">10%</option><option value="15">15%</option><option value="20">20% — Aggressive</option></select></div>
       <div style="text-align:right;margin-top:16px">
         <button class="btn-hdr" onclick="appView='dashboard';render()" style="color:#2c3e50;border-color:#d5dbdb;margin-right:8px">Cancel</button>
         <button class="btn-save" onclick="handleCreateProject()">Create Project</button>
@@ -2063,13 +2004,13 @@ function renderNewProject(app){
 
 function applyProjectTemplate(tmpl){
   const templates={
-    standard_client:{ownership:"Client Owned",margin:40,upcharge:15,merchant:"Client",ccFee:3.25,shipper:"BLP",rollSetup:"No",roundTo:"0.01"},
-    standard_blp:{ownership:"BLP Owned",margin:40,upcharge:15,merchant:"Client",ccFee:3.25,shipper:"BLP",rollSetup:"No",roundTo:"0.01"},
-    atmos:{ownership:"Client Owned",margin:35,upcharge:15,merchant:"Client",ccFee:3.25,shipper:"BLP",rollSetup:"No",roundTo:"1.00"},
-    dalg:{ownership:"Client Owned",margin:40,upcharge:0,merchant:"Client",ccFee:3.25,shipper:"BLP",rollSetup:"No",roundTo:"0.01"},
-    janiking:{ownership:"BLP Owned",margin:35,upcharge:15,merchant:"Client",ccFee:3.25,shipper:"BLP",rollSetup:"No",roundTo:"0.01"},
-    cro:{ownership:"BLP Owned",margin:35,upcharge:15,merchant:"Client",ccFee:3.25,shipper:"BLP",rollSetup:"No",roundTo:"0.01"},
-    on_demand:{ownership:"Client Owned",margin:40,upcharge:15,merchant:"Client",ccFee:3.25,shipper:"Client",rollSetup:"No",roundTo:"0.01"},
+    standard_client:{ownership:"Client Owned",margin:40,upcharge:15,merchant:"Client",ccFee:3.25,shipper:"BLP",rollSetup:"No",roundTo:"0.01",hasSpread:"No",spreadAmount:"5"},
+    standard_blp:{ownership:"BLP Owned",margin:40,upcharge:15,merchant:"Client",ccFee:3.25,shipper:"BLP",rollSetup:"No",roundTo:"0.01",hasSpread:"No",spreadAmount:"5"},
+    atmos:{ownership:"Client Owned",margin:35,upcharge:15,merchant:"Client",ccFee:3.25,shipper:"BLP",rollSetup:"No",roundTo:"1.00",hasSpread:"Yes",spreadAmount:"5"},
+    dalg:{ownership:"Client Owned",margin:40,upcharge:0,merchant:"Client",ccFee:3.25,shipper:"BLP",rollSetup:"No",roundTo:"0.01",hasSpread:"No",spreadAmount:"5"},
+    janiking:{ownership:"BLP Owned",margin:35,upcharge:15,merchant:"Client",ccFee:3.25,shipper:"BLP",rollSetup:"No",roundTo:"0.01",hasSpread:"No",spreadAmount:"5"},
+    cro:{ownership:"BLP Owned",margin:35,upcharge:15,merchant:"Client",ccFee:3.25,shipper:"BLP",rollSetup:"No",roundTo:"0.01",hasSpread:"No",spreadAmount:"5"},
+    on_demand:{ownership:"Client Owned",margin:40,upcharge:15,merchant:"Client",ccFee:3.25,shipper:"Client",rollSetup:"No",roundTo:"0.01",hasSpread:"No",spreadAmount:"5"},
   };
   const t=templates[tmpl];
   if(!t)return;
@@ -2081,6 +2022,8 @@ function applyProjectTemplate(tmpl){
   document.getElementById('npShipper').value=t.shipper;
   document.getElementById('npRollSetup').value=t.rollSetup;
   document.getElementById('npRoundTo').value=t.roundTo;
+  document.getElementById('npHasSpread').value=t.hasSpread;
+  document.getElementById('npSpreadAmount').value=t.spreadAmount;
   showToast("Template applied! Adjust settings as needed.");
 }
 
@@ -2102,6 +2045,8 @@ async function handleCreateProject(){
       ShipperAccount:document.getElementById('npShipper').value,
       RollSetUpIntoPrice:document.getElementById('npRollSetup').value,
       RoundTo:document.getElementById('npRoundTo').value,
+      HasSpread:document.getElementById('npHasSpread').value,
+      SpreadAmount:parseFloat(document.getElementById('npSpreadAmount').value)||0,
       Status:"Active",
     });
     showToast("Project created!");
@@ -2237,9 +2182,8 @@ function renderForm(app){
       </div>
       <div class="row row-2">
         ${fld("Customer Spread",mkTog("hasSpread",["Yes","No"]))}
-        ${form.hasSpread==="Yes"?fld("Spread Type",mkTog("spreadType",["$","%"])):''}
+        ${form.hasSpread==="Yes"?fld("Spread %",mkSel("spreadAmount",["0","2","3","5","10","15","20"]),{help:"0%=No spread, 5%=Default, 20%=Aggressive"}):''}
       </div>
-      ${form.hasSpread==="Yes"?'<div class="row row-2">'+fld("Spread Amount",mkIn("spreadAmount","number",""),{help:form.spreadType==="%"?"Percentage added to sell price (e.g., 20 = 20%)":"Flat dollar amount added to sell price"})+'<div></div></div>':''}
       </div>
       <div class="row row-2">
         ${fld("Shipping Upcharge",mkTog("shippingUpchargeType",["None","Flat $","% of Transaction"]))}
@@ -2254,7 +2198,7 @@ function renderForm(app){
         ${fld("Product Category",mkSel("websiteCategory",[...CATEGORIES]),{required:true})}
       </div>
       ${form.websiteCategory==="Other"?fld("Custom Category",mkIn("customCategory","text","Enter category name")):''}
-      ${form.websiteCategory?`<div style="font-size:10px;color:${isSoftGoods()?'#27ae60':'#e67e22'};margin:-6px 0 10px;font-weight:600">${isSoftGoods()?'☑ Soft Goods — 1% freight':'☑ Hard Goods — 10% freight'}</div>`:''}
+      ${form.websiteCategory?`<div style="font-size:10px;color:${isSoftGoods()?'#27ae60':'#e67e22'};margin:-6px 0 10px;font-weight:600">${isSoftGoods()?'☑ Soft Goods (Apparel)':'☑ Hard Goods'}</div>`:''}
       <div class="row row-2">
         ${fld("Vendor Item #",mkIn("vendorItemNum","text","e.g., PC55"),{required:true})}
         ${fld("Item Name",mkIn("itemName","text","e.g., Realtree 10oz Tumbler"),{required:true})}
@@ -2377,11 +2321,11 @@ function renderForm(app){
         '<div class="row row-2"><div class="field"><label class="field-label">Deco '+(i+1)+' Setup Sell'+(dec.method?' — '+dec.method:'')+'</label><input type="number" value="'+(dec.setupSell||'')+'" onchange="setDeco('+i+',\'setupSell\',this.value)" placeholder="'+(p(dec.setupCost||form.initialSetupCharge)/0.8).toFixed(2)+'"><div class="field-help">Auto: $'+(p(dec.setupCost||form.initialSetupCharge)/0.8).toFixed(2)+'</div></div><div></div></div>'
       ).join('')}
       ${fld("PMS Match (sell)",mkIn("pmsSell","number",""),{help:p(form.pmsCharge)>0?"Auto: $"+(p(form.pmsCharge)/0.8).toFixed(2):""})}`
-    )+(role!=="sales"?crd("Pricing Preview",`Margin: ${compute().effectiveMargin}%`+(c.isBundle?' — Per Pack ('+c.packQty+'pcs)':''),
+    )+(role!=="sales"?crd("Pricing Preview",`Margin: ${compute().effectiveMargin}%`,
       `<div class="pricing-box"><div class="row ${form.hasSpread==='Yes'?'row-4':'row-3'}">
-        <div><div class="pricing-label">Net${bundleLabel(c)}</div><div class="pricing-value">$${c.displayNet.toFixed(2)}</div></div>
-        <div><div class="pricing-label">Program${bundleLabel(c)}</div><div class="pricing-value blue">$${c.displayProgram.toFixed(2)}</div></div>
-        ${form.hasSpread==='Yes'?'<div><div class="pricing-label">Sell (SB)'+bundleLabel(c)+'</div><div class="pricing-value" style="color:#8e44ad">$'+c.displaySellSB.toFixed(2)+'</div>'+bundleSub(c)+'</div><div><div class="pricing-label">Sell (Website)'+bundleLabel(c)+'</div><div class="pricing-value green">$'+c.displaySell.toFixed(2)+'</div>'+bundleSub(c)+'</div>':'<div><div class="pricing-label">Sell'+bundleLabel(c)+'</div><div class="pricing-value green">$'+c.displaySell.toFixed(2)+'</div>'+bundleSub(c)+'</div>'}
+        <div><div class="pricing-label">Net</div><div class="pricing-value">$${c.totalNet.toFixed(2)}</div></div>
+        <div><div class="pricing-label">Program</div><div class="pricing-value blue">$${c.programPrice.toFixed(2)}</div></div>
+        ${form.hasSpread==='Yes'?'<div><div class="pricing-label">Sell (SB)</div><div class="pricing-value" style="color:#8e44ad">$'+c.sellBeforeSpread.toFixed(2)+'</div></div><div><div class="pricing-label">Sell (Website)</div><div class="pricing-value green">$'+c.finalSell.toFixed(2)+'</div></div>':'<div><div class="pricing-label">Sell</div><div class="pricing-value green">$'+c.finalSell.toFixed(2)+'</div></div>'}
       </div></div>`):'')
     +crd("Quantity Price Breaks","Optional: Set tiered pricing for different order quantities.",
       `${fld("Has Price Breaks?",mkTog("hasPriceBreaks",["Yes","No"]))}
@@ -2402,11 +2346,11 @@ function renderForm(app){
       ${form.shipperAccount==="BLP"?fld("Include Freight?",mkTog("includeInboundFreight",["Yes","No"]),{owner:"programs"}):''}
       ${form.shipperAccount==="BLP"&&form.includeInboundFreight==="Yes"?'<div class="row row-2">'+fld("Freight Method",mkTog("inboundFreightMethod",["Category Default","Manual Entry"]))+(form.inboundFreightMethod==="Manual Entry"?fld("Freight Total $",mkIn("inboundFreightTotal","number","")):'')+ '</div><div class="inbound-box"><div class="inbound-label">Inbound/pc: $'+c.inboundFreight.toFixed(4)+(c.outboundFreight>0?' | Outbound/pc: $'+c.outboundFreight.toFixed(4):'')+'</div></div>':''}
       ${form.shipperAccount==="BLP"&&form.includeInboundFreight!=="Yes"?'<div style="font-size:11px;color:#7f8c8d;margin-top:4px;font-style:italic">Freight is off. Programs can enable when applicable.</div>':''}`
-    ,"programs")+crd("Pricing with Freight",c.isBundle?'Per Pack ('+c.packQty+'pcs)':'',
+    ,"programs")+crd("Pricing with Freight","",
       `<div class="pricing-box"><div class="row ${form.hasSpread==='Yes'?'row-4':'row-3'}">
-        <div><div class="pricing-label">Net${bundleLabel(c)}</div><div class="pricing-value">$${c.displayNet.toFixed(2)}</div></div>
-        <div><div class="pricing-label">Program${bundleLabel(c)}</div><div class="pricing-value blue">$${c.displayProgram.toFixed(2)}</div></div>
-        ${form.hasSpread==='Yes'?'<div><div class="pricing-label">Sell (SB)'+bundleLabel(c)+'</div><div class="pricing-value" style="color:#8e44ad">$'+c.displaySellSB.toFixed(2)+'</div>'+bundleSub(c)+'</div><div><div class="pricing-label">Sell (Website)'+bundleLabel(c)+'</div><div class="pricing-value green">$'+c.displaySell.toFixed(2)+'</div>'+bundleSub(c)+'</div>':'<div><div class="pricing-label">Sell'+bundleLabel(c)+'</div><div class="pricing-value green">$'+c.displaySell.toFixed(2)+'</div>'+bundleSub(c)+'</div>'}
+        <div><div class="pricing-label">Net</div><div class="pricing-value">$${c.totalNet.toFixed(2)}</div></div>
+        <div><div class="pricing-label">Program</div><div class="pricing-value blue">$${c.programPrice.toFixed(2)}</div></div>
+        ${form.hasSpread==='Yes'?'<div><div class="pricing-label">Sell (SB)</div><div class="pricing-value" style="color:#8e44ad">$'+c.sellBeforeSpread.toFixed(2)+'</div></div><div><div class="pricing-label">Sell (Website)</div><div class="pricing-value green">$'+c.finalSell.toFixed(2)+'</div></div>':'<div><div class="pricing-label">Sell</div><div class="pricing-value green">$'+c.finalSell.toFixed(2)+'</div></div>'}
       </div></div>`);
   }
 
@@ -2513,11 +2457,15 @@ function renderForm(app){
       ${form.itemDescription?'<div class="inbound-box"><div class="inbound-label">Sales Draft:</div><div style="font-size:11px;margin-top:3px">'+form.itemDescription+'</div></div>':''}`
     ,"programs")+crd("Pricing",c.isBundle?'Per Pack ('+c.packQty+' pcs)':'',
       `<div class="row row-3">
-        ${fld("Website Price",mkIn("currentWebsitePrice","number",c.displaySell.toFixed(2)),{owner:"admin",help:c.isBundle?'Pack price ('+c.packQty+'pcs × $'+c.finalSell.toFixed(2)+'/ea)':''})}
-        ${fld("SB Eaches",mkIn("sbPriceEaches","number",c.sellPriceEach.toFixed(2)),{owner:"admin"})}
-        ${fld("SB Packs",mkIn("sbPricePacks","number",c.sellPricePack.toFixed(2)),{owner:"admin"})}
+        ${fld("Website Price (calc)",mkIn("currentWebsitePrice","number",c.displaySell.toFixed(2)),{owner:"admin",help:'Calculated with '+form.spreadAmount+'% spread'})}
+        ${fld("Final Website Price",mkIn("finalWebsitePrice","number",c.displaySell.toFixed(2)),{owner:"admin",help:"Override if different from calculated"})}
+        ${fld("Website Spread %",mkIn("websiteSpreadPct","number",form.hasSpread==="Yes"?form.spreadAmount:"0"),{owner:"admin"})}
       </div>
-      ${fld("Final Sell SB",mkIn("finalSellSB","number",c.displaySell.toFixed(2)),{owner:"admin",help:c.isBundle?'Pack price ('+c.packQty+'pcs × $'+c.finalSell.toFixed(2)+'/ea)':''})}
+      <div class="row row-3">
+        ${fld("SB Eaches",mkIn("sbPriceEaches","number",c.sellBeforeSpread.toFixed(2)),{owner:"admin"})}
+        ${fld("SB Packs",mkIn("sbPricePacks","number",c.sellPricePack.toFixed(2)),{owner:"admin"})}
+        ${fld("Final Sell SB",mkIn("finalSellSB","number",c.displaySellSB.toFixed(2)),{owner:"admin",help:'No spread applied'})}
+      </div>
       <div class="row row-2">
         ${fld("OMG Sell",mkIn("omgSell","number","0"),{owner:"admin"})}
         ${fld("OMG Cost",mkIn("omgCost","number","0"),{owner:"admin"})}
@@ -2550,14 +2498,11 @@ function renderForm(app){
       +rr("Item",form.itemName+" ("+form.vendorItemNum+")")+rr("Color",form.itemColor)+rr("Stock",form.stockStatus)
       +(isApparel()?rr("Sizes",getEnabledSizes().join(", "))+rr("Total Units",String(getTotalSizeQty()))+rr("Blended Cost","$"+getBlendedCost().toFixed(2))+(form.singlePriceAllSizes==="Yes"?rr("Pricing","Single price all sizes"):""):"")
       +form.decorations.map((d,i)=>rr("Deco "+(i+1),(d.method||"")+" @ "+(d.location||"")+(p(d.runCharge)>0?" — Run: $"+p(d.runCharge).toFixed(2)+"/pc":""))).join("")
-      +(form.soldAs==="Pack"&&p(form.qtyPerPack)>1?rr("Sold As","Pack of "+form.qtyPerPack):"")
-    )+crd("Pricing",c.isBundle?'Per Pack ('+c.packQty+' pcs)':'',`<div class="review-summary"><div class="row ${form.hasSpread==='Yes'?'row-4':'row-3'}">
-      <div><div class="pricing-label">Net${bundleLabel(c)}</div><div class="pricing-value">$${c.displayNet.toFixed(2)}</div>${c.isBundle?'<div style="font-size:9px;color:#95a5a6">$'+c.totalNet.toFixed(2)+'/ea</div>':''}</div>
-      <div><div class="pricing-label">Program${bundleLabel(c)}</div><div class="pricing-value blue">$${c.displayProgram.toFixed(2)}</div>${c.isBundle?'<div style="font-size:9px;color:#95a5a6">$'+c.programPrice.toFixed(2)+'/ea</div>':''}</div>
-      ${form.hasSpread==='Yes'?'<div><div class="pricing-label">Sell (SB)'+bundleLabel(c)+'</div><div class="pricing-value" style="color:#8e44ad">$'+c.displaySellSB.toFixed(2)+'</div>'+(c.isBundle?'<div style="font-size:9px;color:#95a5a6">$'+c.sellBeforeSpread.toFixed(2)+'/ea</div>':'')+'</div><div><div class="pricing-label">Sell (Website)'+bundleLabel(c)+'</div><div class="pricing-value green">$'+c.displaySell.toFixed(2)+'</div>'+(c.isBundle?'<div style="font-size:9px;color:#95a5a6">$'+c.finalSell.toFixed(2)+'/ea</div>':'')+'</div>':'<div><div class="pricing-label">Sell'+bundleLabel(c)+'</div><div class="pricing-value green">$'+c.displaySell.toFixed(2)+'</div>'+(c.isBundle?'<div style="font-size:9px;color:#95a5a6">$'+c.finalSell.toFixed(2)+'/ea</div>':'')+'</div>'}
-    </div></div>`
-      +(c.isBundle?rr("Sold As","Pack of "+c.packQty):'')
-      +rr("Item Cost","$"+p(form.itemCostNet).toFixed(2))
+    )+crd("Pricing","",`<div class="review-summary"><div class="row ${form.hasSpread==='Yes'?'row-4':'row-3'}">
+      <div><div class="pricing-label">Net</div><div class="pricing-value">$${c.totalNet.toFixed(2)}</div></div>
+      <div><div class="pricing-label">Program</div><div class="pricing-value blue">$${c.programPrice.toFixed(2)}</div></div>
+      ${form.hasSpread==='Yes'?'<div><div class="pricing-label">Sell (SB)</div><div class="pricing-value" style="color:#8e44ad">$'+c.sellBeforeSpread.toFixed(2)+'</div></div><div><div class="pricing-label">Sell (Website)</div><div class="pricing-value green">$'+c.finalSell.toFixed(2)+'</div></div>':'<div><div class="pricing-label">Sell</div><div class="pricing-value green">$'+c.finalSell.toFixed(2)+'</div></div>'}
+    </div></div>`+rr("Item Cost","$"+p(form.itemCostNet).toFixed(2))
       +rr("Total Run Charges","$"+form.decorations.reduce((s,d)=>s+p(d.runCharge),0).toFixed(2)+" ("+form.decorations.filter(d=>p(d.runCharge)>0).map((d,i)=>d.location+": $"+p(d.runCharge).toFixed(2)).join(", ")+")")
       +rr("Inbound Freight","$"+c.inboundFreight.toFixed(4))
       +(c.outboundFreight>0?rr("Outbound Freight","$"+c.outboundFreight.toFixed(4)):'')
@@ -2565,7 +2510,7 @@ function renderForm(app){
       +rr("Setup",form.rollSetupIntoPrice==="Yes"?"Rolled in ($"+c.repeatPerPc.toFixed(4)+"/unit)":"Charged separately")
       +rr("Shipper",form.shipperAccount==="BLP"?"BLP — "+form.freightScenario:"Client shipper")
       +rr("Rounding","Nearest $"+form.roundTo)
-      +(form.hasSpread==="Yes"?rr("Customer Spread",form.spreadType==="%" ?form.spreadAmount+"% ($"+(c.finalSell-c.sellPriceEach-c.shippingUpcharge>0?(c.finalSell-c.sellPriceEach-c.shippingUpcharge).toFixed(2):"0")+")":"$"+p(form.spreadAmount).toFixed(2)):"")
+      +(form.hasSpread==="Yes"&&p(form.spreadAmount)>0?rr("Customer Spread",form.spreadAmount+"% ($"+(c.finalSell-c.sellBeforeSpread>0?(c.finalSell-c.sellBeforeSpread).toFixed(2):"0")+")"):"")
       +rr("Ships In",form.shipsIn)+(c.marginWarning?'<div class="margin-warning"><span class="margin-warning-icon">⚠️</span><span class="margin-warning-text">Margin below 35%!</span></div>':''))
     +(isApparel()&&getEnabledSizes().length>0?crd("Per-Size Pricing Breakdown","",
       `<table class="size-grid">
@@ -2580,24 +2525,14 @@ function renderForm(app){
         <tr style="font-weight:700;border-top:2px solid #1a5276"><td>Total</td><td></td><td></td><td></td><td>${getTotalSizeQty()}</td><td></td><td></td><td>$${getEnabledSizes().reduce((s,sz)=>s+computeForSize(sz).sellEach*p(form.sizes[sz].qty),0).toFixed(2)}</td></tr>
       </table>`
     ):'')
-    +(form.hasPriceBreaks==="Yes"&&form.priceBreaks.length>0?crd("Quantity Price Breaks",isApparel()&&getEnabledSizes().length>0?"Sell price per size at each quantity tier":"",
-      (isApparel()&&getEnabledSizes().length>0&&form.singlePriceAllSizes!=="Yes"&&getEnabledSizes().some(sz=>isUpsize(sz))?
-      `<div style="overflow-x:auto"><table class="size-grid">
-        <tr><th>Qty Range</th><th>Run Charge</th>${getEnabledSizes().map(sz=>'<th>'+sizeLabel(sz)+'</th>').join('')}</tr>
-        ${form.priceBreaks.map(brk=>{
-          return '<tr><td style="font-weight:600">'+(brk.minQty||'1')+' — '+(brk.maxQty||'∞')+'</td><td>$'+(p(brk.runCharge)>=0&&brk.runCharge!==""?p(brk.runCharge):form.decorations.reduce((s,d)=>s+p(d.runCharge),0)).toFixed(2)+'</td>'+getEnabledSizes().map(sz=>{
-            const bs=computeForBreakAndSize(brk,sz);
-            return '<td class="sell-val">$'+bs.sellEach.toFixed(2)+'</td>';
-          }).join('')+'</tr>';
-        }).join('')}
-      </table></div>`
-      :`<table class="size-grid">
+    +(form.hasPriceBreaks==="Yes"&&form.priceBreaks.length>0?crd("Quantity Price Breaks","",
+      `<table class="size-grid">
         <tr><th>Qty Range</th><th>Item Cost</th><th>Run Charge</th><th>Net</th><th>Program</th><th>Sell</th></tr>
         ${form.priceBreaks.map(brk=>{
           const bc=computeForBreak(brk);
-          return '<tr><td>'+(brk.minQty||'1')+' — '+(brk.maxQty||'∞')+'</td><td>$'+bc.itemCost.toFixed(2)+'</td><td>$'+(p(brk.runCharge)>=0&&brk.runCharge!==""?p(brk.runCharge):form.decorations.reduce((s,d)=>s+p(d.runCharge),0)).toFixed(2)+'</td><td>$'+bc.totalNet.toFixed(2)+'</td><td class="blue">$'+bc.programPrice.toFixed(2)+'</td><td class="sell-val">$'+bc.sellEach.toFixed(2)+'</td></tr>';
+          return '<tr><td>'+(brk.minQty||'1')+'—'+(brk.maxQty||'∞')+'</td><td>$'+bc.itemCost.toFixed(2)+'</td><td>$'+(p(brk.runCharge)>=0&&brk.runCharge!==""?p(brk.runCharge):form.decorations.reduce((s,d)=>s+p(d.runCharge),0)).toFixed(2)+'</td><td>$'+bc.totalNet.toFixed(2)+'</td><td class="blue">$'+bc.programPrice.toFixed(2)+'</td><td class="sell-val">$'+bc.sellEach.toFixed(2)+'</td></tr>';
         }).join('')}
-      </table>`)
+      </table>`
     ):'');
   }
 
