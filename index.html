@@ -641,7 +641,7 @@ function spFieldsToForm(sp){
     form.shippingUpchargeAmount=currentProject.ShipUpchargeAmount!=null?String(currentProject.ShipUpchargeAmount):"";
     form.clientSuppliedStock=currentProject.ClientSuppliedStock||"No";
     form.merchantAccount=currentProject.MerchantAccount||"Client";
-    form.ccFeePct=currentProject.CCFeePct!=null?String(currentProject.CCFeePct):"3.2";
+    form.ccFeePct=currentProject.CCFeePct!=null?String(currentProject.CCFeePct):"3.25";
     form.shipperAccount=currentProject.ShipperAccount||"BLP";
     form.rollSetupIntoPrice=currentProject.RollSetUpIntoPrice||"No";
     form.roundTo=currentProject.RoundTo||"0.01";
@@ -656,7 +656,7 @@ function getDefaults(){
     submissionType:"Standard Product",
     programOwnership:"Client Owned",marginFloor:"40",blpOwnershipUpcharge:"15",hasSpread:"No",spreadAmount:"5",
     shippingUpchargeType:"None",shippingUpchargeAmount:"",clientSuppliedStock:"No",
-    merchantAccount:"Client",ccFeePct:"3.2",
+    merchantAccount:"Client",ccFeePct:"3.25",
     shipperAccount:"BLP",freightScenario:"Blank to Decorator",
     rollSetupIntoPrice:"No",
     roundTo:"0.01",
@@ -699,7 +699,24 @@ function p(v){return parseFloat(v)||0;}
 function isSoftGoods(){return SOFT_GOODS.includes(form.websiteCategory==="Other"?form.customCategory:form.websiteCategory);}
 function isApparel(){return form.isApparelItem==="Yes";}
 function isInStock(){return form.stockStatus==="In Stock";}
-function getFreightPct(){return isSoftGoods()?0.01:0.10;}
+// NEW fee schedule (May 2026) — tiered by total net cost per piece
+function getFreightPerPc(totalNet){
+  if(totalNet<=1.20)return 0.06;
+  if(totalNet<=2.99)return 0.11;
+  if(totalNet<=5.99)return 0.20;
+  if(totalNet<=14.99)return 0.44;
+  if(totalNet<=59.99)return 0.70;
+  return 1.50;
+}
+// Rec fee and pick fee — both identical, tiered by program price
+function getRecFee(pp){
+  if(pp<=1.99)return 0.15;
+  if(pp<=4.99)return 0.20;
+  if(pp<=24.99)return 0.30;
+  if(pp<=99.99)return 0.50;
+  return 0.75;
+}
+function getPickFee(pp){return getRecFee(pp);}
 
 function setVal(key,val,silent){
   if(role==="admin"&&form[key]!==undefined&&form[key]!==val)modified[key]=true;
@@ -735,31 +752,26 @@ function compute(){
   const baseMf=p(form.marginFloor)||40,
     blpUp=form.programOwnership==="BLP Owned"?(p(form.blpOwnershipUpcharge)||15):0,
     effectiveMf=baseMf+blpUp,md=(100-effectiveMf)/100;
-  const freightPct=getFreightPct();
+  const freightAmt=getFreightPerPc(tn);
   let ibf=0,obf=0;
   // Freight logic based on shipper account and scenario
   if(form.shipperAccount==="Client"){
     ibf=0;obf=0; // Client shipper = no freight
   }else if(isInStock()){
-    if(form.freightScenario==="Pre-decorated at Supplier"){
-      // Only outbound (supplier to warehouse), no inbound
-      ibf=0;
-      obf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct):0;
-    }else{
-      // Blank to decorator: both inbound and outbound
-      ibf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct):0;
-      obf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct):0;
-    }
+    const manualPc=form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):0;
+    const autoFreight=freightAmt/qp;
+    const fval=form.includeInboundFreight==="Yes"?(manualPc>0?manualPc:autoFreight):0;
+    ibf=fval;obf=fval;
   }else{
     // On Demand: inbound only if blank to decorator
     if(form.freightScenario==="Blank to Decorator"){
-      ibf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct):0;
+      ibf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):freightAmt/qp):0;
     }
     obf=0; // Never outbound for on-demand
   }
   const pp=md>0?(tn+ibf+obf)/md:0,
-    rf=isInStock()?0.16/qp:0,pf=isInStock()?(pp<=9.99?.15:pp<=24.99?.30:.45)/qp:0,
-    ccRate=form.merchantAccount==="BLP"?(p(form.ccFeePct)||3.2)/100:0,
+    rf=isInStock()?getRecFee(pp)/qp:0,pf=isInStock()?getPickFee(pp)/qp:0,
+    ccRate=form.merchantAccount==="BLP"?(p(form.ccFeePct)||3.25)/100:0,
     cc=pp*ccRate,spe=pp+rf+pf+cc,spp=spe*qp;
   let su=0;
   if(form.shippingUpchargeType==="Flat $")su=p(form.shippingUpchargeAmount);
@@ -779,10 +791,15 @@ function compute(){
   const setupSellAuto=p(form.initialSetupCharge)/0.8;
   const pmsSellAuto=p(form.pmsCharge)/0.8;
   const marginWarning=effectiveMf<35;
+  // Bundle-aware pricing: when sold as Pack, multiply per-piece prices by pack qty
+  const packQty=form.soldAs==="Pack"?(p(form.qtyPerPack)||1):1;
+  const isBundle=packQty>1;
+  const displayNet=tn*packQty,displayProgram=pp*packQty,displaySell=fs*packQty,displaySellSB=sbRounded*packQty;
   return{totalNet:tn,programPrice:pp,inboundFreight:ibf,outboundFreight:obf,receivingFee:rf,pickFee:pf,ccFee:cc,
     sellPriceEach:spe,sellPricePack:spp,repeatPerPc:rppc,bundlePerPc:bppc,finalSell:fs,sellBeforeSpread:sbRounded,
     marginFloor:baseMf,effectiveMargin:effectiveMf,blpUpcharge:blpUp,shippingUpcharge:su,
-    freightPct,setupSellAuto,pmsSellAuto,marginWarning,pmsCharge:p(form.pmsCharge),ccRate:ccRate*100};
+    freightAmt,setupSellAuto,pmsSellAuto,marginWarning,pmsCharge:p(form.pmsCharge),ccRate:ccRate*100,
+    isBundle,packQty,displayNet,displayProgram,displaySell,displaySellSB};
 }
 
 // ============================================================
@@ -935,27 +952,24 @@ function computeForSize(sz){
   const baseMf=p(form.marginFloor)||40,
     blpUp=form.programOwnership==="BLP Owned"?(p(form.blpOwnershipUpcharge)||15):0,
     effectiveMf=baseMf+blpUp,md=(100-effectiveMf)/100;
-  const freightPct=getFreightPct();
+  const freightAmt=getFreightPerPc(tn);
   let ibf=0,obf=0;
   if(form.shipperAccount==="Client"){
     ibf=0;obf=0;
   }else if(isInStock()){
-    if(form.freightScenario==="Pre-decorated at Supplier"){
-      ibf=0;
-      obf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct):0;
-    }else{
-      ibf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct):0;
-      obf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct):0;
-    }
+    const manualPc=form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):0;
+    const autoFreight=freightAmt/qp;
+    const fval=form.includeInboundFreight==="Yes"?(manualPc>0?manualPc:autoFreight):0;
+    ibf=fval;obf=fval;
   }else{
     if(form.freightScenario==="Blank to Decorator"){
-      ibf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct):0;
+      ibf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):freightAmt/qp):0;
     }
     obf=0;
   }
   const pp=md>0?(tn+ibf+obf)/md:0,
-    rf=isInStock()?0.16/qp:0,pf=isInStock()?(pp<=9.99?.15:pp<=24.99?.30:.45)/qp:0,
-    ccRate=form.merchantAccount==="BLP"?(p(form.ccFeePct)||3.2)/100:0,
+    rf=isInStock()?getRecFee(pp)/qp:0,pf=isInStock()?getPickFee(pp)/qp:0,
+    ccRate=form.merchantAccount==="BLP"?(p(form.ccFeePct)||3.25)/100:0,
     cc=pp*ccRate,spe=pp+rf+pf+cc;
   let su=0;
   if(form.shippingUpchargeType==="Flat $")su=p(form.shippingUpchargeAmount);
@@ -1016,23 +1030,21 @@ function computeForBreak(brk){
   const baseMf=p(form.marginFloor)||40;
   const blpUp=form.programOwnership==="BLP Owned"?(p(form.blpOwnershipUpcharge)||15):0;
   const effectiveMf=baseMf+blpUp,md=(100-effectiveMf)/100;
-  const freightPct=getFreightPct();
+  const freightAmt=getFreightPerPc(tn);
   let ibf=0,obf=0;
   if(form.shipperAccount==="Client"){ibf=0;obf=0;}
   else if(isInStock()){
-    if(form.freightScenario==="Pre-decorated at Supplier"){
-      ibf=0;obf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct):0;
-    }else{
-      ibf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct):0;
-      obf=ibf;
-    }
+    const manualPc=form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):0;
+    const autoFreight=freightAmt/qp;
+    const fval=form.includeInboundFreight==="Yes"?(manualPc>0?manualPc:autoFreight):0;
+    ibf=fval;obf=fval;
   }else{
-    if(form.freightScenario==="Blank to Decorator")ibf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):ic*freightPct):0;
+    if(form.freightScenario==="Blank to Decorator")ibf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):freightAmt/qp):0;
     obf=0;
   }
   const pp=md>0?(tn+ibf+obf)/md:0;
-  const rf=isInStock()?0.16/qp:0,pf=isInStock()?(pp<=9.99?.15:pp<=24.99?.30:.45)/qp:0;
-  const ccRate=form.merchantAccount==="BLP"?(p(form.ccFeePct)||3.2)/100:0;
+  const rf=isInStock()?getRecFee(pp)/qp:0,pf=isInStock()?getPickFee(pp)/qp:0;
+  const ccRate=form.merchantAccount==="BLP"?(p(form.ccFeePct)||3.25)/100:0;
   const cc=pp*ccRate,spe=pp+rf+pf+cc;
   let su=0;
   if(form.shippingUpchargeType==="Flat $")su=p(form.shippingUpchargeAmount);
@@ -1468,7 +1480,7 @@ async function exportProjectToExcel(){
         form.marginFloor=proj.MarginFloor!=null?String(proj.MarginFloor):"40";
         form.blpOwnershipUpcharge=proj.BLPUpchargePct!=null?String(proj.BLPUpchargePct):"15";
         form.merchantAccount=proj.MerchantAccount||"Client";
-        form.ccFeePct=proj.CCFeePct!=null?String(proj.CCFeePct):"3.2";
+        form.ccFeePct=proj.CCFeePct!=null?String(proj.CCFeePct):"3.25";
         form.shipperAccount=proj.ShipperAccount||"BLP";
         form.rollSetupIntoPrice=proj.RollSetUpIntoPrice||"No";
         form.roundTo=proj.RoundTo||"0.01";
@@ -2086,7 +2098,7 @@ async function handleCreateProject(){
       MarginFloor:parseFloat(document.getElementById('npMargin').value)||40,
       BLPUpchargePct:parseFloat(document.getElementById('npUpcharge').value)||15,
       MerchantAccount:document.getElementById('npMerchant').value,
-      CCFeePct:parseFloat(document.getElementById('npCCFee').value)||3.2,
+      CCFeePct:parseFloat(document.getElementById('npCCFee').value)||3.25,
       ShipperAccount:document.getElementById('npShipper').value,
       RollSetUpIntoPrice:document.getElementById('npRollSetup').value,
       RoundTo:document.getElementById('npRoundTo').value,
@@ -2213,7 +2225,7 @@ function renderForm(app){
     )+crd("Merchant & Shipping Accounts","",
       `<div class="row row-2">
         ${fld("Merchant Account",mkTog("merchantAccount",["Client","BLP","No CC"]))}
-        ${form.merchantAccount==="BLP"?fld("CC Fee %",mkIn("ccFeePct","number","3.2"),{help:"Floor: 2.9%. Default: 3.2% (covers $0.30/txn)."}):''} 
+        ${form.merchantAccount==="BLP"?fld("CC Fee %",mkIn("ccFeePct","number","3.25"),{help:"Floor: 2.9%. Default: 3.25%."}):''} 
       </div>
       <div class="row row-2">
         ${fld("Shipper Account",mkTog("shipperAccount",["BLP","Client"]))}
