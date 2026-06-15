@@ -773,6 +773,8 @@ function compute(){
     rf=isInStock()?getRecFee(pp)/qp:0,pf=isInStock()?getPickFee(pp)/qp:0,
     ccRate=form.merchantAccount==="BLP"?(p(form.ccFeePct)||3.25)/100:0,
     cc=pp*ccRate,spe=pp+rf+pf+cc,spp=spe*qp;
+  // SB Each = cost + all fees WITHOUT margin (per Jenn): Total Net + freight + rec + pick + CC
+  const sbEachNoMargin=tn+ibf+obf+rf+pf+cc;
   let su=0;
   if(form.shippingUpchargeType==="Flat $")su=p(form.shippingUpchargeAmount);
   else if(form.shippingUpchargeType==="% of Transaction")su=spe*(p(form.shippingUpchargeAmount)/100);
@@ -799,7 +801,7 @@ function compute(){
     sellPriceEach:spe,sellPricePack:spp,repeatPerPc:rppc,bundlePerPc:bppc,finalSell:fs,sellBeforeSpread:sbRounded,
     marginFloor:baseMf,effectiveMargin:effectiveMf,blpUpcharge:blpUp,shippingUpcharge:su,
     freightAmt,setupSellAuto,pmsSellAuto,marginWarning,pmsCharge:p(form.pmsCharge),ccRate:ccRate*100,
-    isBundle,packQty,displayNet,displayProgram,displaySell,displaySellSB};
+    isBundle,packQty,displayNet,displayProgram,displaySell,displaySellSB,sbEachNoMargin};
 }
 
 // ============================================================
@@ -2519,9 +2521,9 @@ function renderForm(app){
         ${fld("Website Spread %",mkIn("websiteSpreadPct","number",form.hasSpread==="Yes"?form.spreadAmount:"0"),{owner:"admin"})}
       </div>
       <div class="row row-3">
-        ${fld("SB Eaches",mkIn("sbPriceEaches","number",c.sellBeforeSpread.toFixed(2)),{owner:"admin"})}
-        ${fld("SB Packs",mkIn("sbPricePacks","number",c.sellPricePack.toFixed(2)),{owner:"admin"})}
-        ${fld("Final Sell SB",mkIn("finalSellSB","number",c.displaySellSB.toFixed(2)),{owner:"admin",help:'No spread applied'})}
+        ${fld("SB Eaches",mkIn("sbPriceEaches","number",c.sbEachNoMargin.toFixed(2)),{owner:"admin",help:"Cost + fees, no margin"})}
+        ${fld("SB Packs",mkIn("sbPricePacks","number",(c.sbEachNoMargin*c.packQty).toFixed(2)),{owner:"admin",help:c.isBundle?c.packQty+' per pack':''})}
+        ${fld("Final Sell SB",mkIn("finalSellSB","number",c.displaySellSB.toFixed(2)),{owner:"admin",help:'Sell w/ margin, no spread'})}
       </div>
       <div class="row row-2">
         ${fld("OMG Sell",mkIn("omgSell","number","0"),{owner:"admin"})}
