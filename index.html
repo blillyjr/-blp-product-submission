@@ -752,29 +752,31 @@ function compute(){
   const baseMf=p(form.marginFloor)||40,
     blpUp=form.programOwnership==="BLP Owned"?(p(form.blpOwnershipUpcharge)||15):0,
     effectiveMf=baseMf+blpUp,md=(100-effectiveMf)/100;
+  // FREIGHT (confirmed model May 2026): single freight charge, divided by order quantity.
+  // Freight is a per-shipment cost, so per-piece freight drops as quantity rises.
   const freightAmt=getFreightPerPc(tn);
-  let ibf=0,obf=0;
-  // Freight logic based on shipper account and scenario
+  let frt=0; // single per-piece freight
   if(form.shipperAccount==="Client"){
-    ibf=0;obf=0; // Client shipper = no freight
-  }else if(isInStock()){
-    const manualPc=form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):0;
-    const autoFreight=freightAmt/qp;
-    const fval=form.includeInboundFreight==="Yes"?(manualPc>0?manualPc:autoFreight):0;
-    ibf=fval;obf=fval;
-  }else{
-    // On Demand: inbound only if blank to decorator
-    if(form.freightScenario==="Blank to Decorator"){
-      ibf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):freightAmt/qp):0;
+    frt=0; // Client shipper = no freight
+  }else if(form.includeInboundFreight==="Yes"){
+    // On-demand only applies freight when blank shipped to decorator
+    const applies=isInStock()||form.freightScenario==="Blank to Decorator";
+    if(applies){
+      if(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0){
+        frt=fq>0?p(form.inboundFreightTotal)/fq:0;
+      }else{
+        frt=fq>0?freightAmt/fq:freightAmt;
+      }
     }
-    obf=0; // Never outbound for on-demand
   }
-  const pp=md>0?(tn+ibf+obf)/md:0,
+  // Kept as separate vars for display compatibility; outbound folded into single charge
+  const ibf=frt,obf=0;
+  const pp=md>0?(tn+frt)/md:0,
     rf=isInStock()?getRecFee(pp)/qp:0,pf=isInStock()?getPickFee(pp)/qp:0,
     ccRate=form.merchantAccount==="BLP"?(p(form.ccFeePct)||3.25)/100:0,
     cc=pp*ccRate,spe=pp+rf+pf+cc,spp=spe*qp;
   // SB Each = cost + all fees WITHOUT margin (per Jenn): Total Net + freight + rec + pick + CC
-  const sbEachNoMargin=tn+ibf+obf+rf+pf+cc;
+  const sbEachNoMargin=tn+frt+rf+pf+cc;
   let su=0;
   if(form.shippingUpchargeType==="Flat $")su=p(form.shippingUpchargeAmount);
   else if(form.shippingUpchargeType==="% of Transaction")su=spe*(p(form.shippingUpchargeAmount)/100);
@@ -955,21 +957,21 @@ function computeForSize(sz){
     blpUp=form.programOwnership==="BLP Owned"?(p(form.blpOwnershipUpcharge)||15):0,
     effectiveMf=baseMf+blpUp,md=(100-effectiveMf)/100;
   const freightAmt=getFreightPerPc(tn);
-  let ibf=0,obf=0;
+  let frt=0;
   if(form.shipperAccount==="Client"){
-    ibf=0;obf=0;
-  }else if(isInStock()){
-    const manualPc=form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):0;
-    const autoFreight=freightAmt/qp;
-    const fval=form.includeInboundFreight==="Yes"?(manualPc>0?manualPc:autoFreight):0;
-    ibf=fval;obf=fval;
-  }else{
-    if(form.freightScenario==="Blank to Decorator"){
-      ibf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):freightAmt/qp):0;
+    frt=0;
+  }else if(form.includeInboundFreight==="Yes"){
+    const applies=isInStock()||form.freightScenario==="Blank to Decorator";
+    if(applies){
+      if(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0){
+        frt=fq>0?p(form.inboundFreightTotal)/fq:0;
+      }else{
+        frt=fq>0?freightAmt/fq:freightAmt;
+      }
     }
-    obf=0;
   }
-  const pp=md>0?(tn+ibf+obf)/md:0,
+  const ibf=frt,obf=0;
+  const pp=md>0?(tn+frt)/md:0,
     rf=isInStock()?getRecFee(pp)/qp:0,pf=isInStock()?getPickFee(pp)/qp:0,
     ccRate=form.merchantAccount==="BLP"?(p(form.ccFeePct)||3.25)/100:0,
     cc=pp*ccRate,spe=pp+rf+pf+cc;
@@ -1033,18 +1035,22 @@ function computeForBreak(brk){
   const blpUp=form.programOwnership==="BLP Owned"?(p(form.blpOwnershipUpcharge)||15):0;
   const effectiveMf=baseMf+blpUp,md=(100-effectiveMf)/100;
   const freightAmt=getFreightPerPc(tn);
-  let ibf=0,obf=0;
-  if(form.shipperAccount==="Client"){ibf=0;obf=0;}
-  else if(isInStock()){
-    const manualPc=form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):0;
-    const autoFreight=freightAmt/qp;
-    const fval=form.includeInboundFreight==="Yes"?(manualPc>0?manualPc:autoFreight):0;
-    ibf=fval;obf=fval;
-  }else{
-    if(form.freightScenario==="Blank to Decorator")ibf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):freightAmt/qp):0;
-    obf=0;
+  // Single freight, divided by this tier's order quantity (minQty)
+  let frt=0;
+  if(form.shipperAccount==="Client"){
+    frt=0;
+  }else if(form.includeInboundFreight==="Yes"){
+    const applies=isInStock()||form.freightScenario==="Blank to Decorator";
+    if(applies){
+      if(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0){
+        frt=fq>0?p(form.inboundFreightTotal)/fq:0;
+      }else{
+        frt=fq>0?freightAmt/fq:freightAmt;
+      }
+    }
   }
-  const pp=md>0?(tn+ibf+obf)/md:0;
+  const ibf=frt,obf=0;
+  const pp=md>0?(tn+frt)/md:0;
   const rf=isInStock()?getRecFee(pp)/qp:0,pf=isInStock()?getPickFee(pp)/qp:0;
   const ccRate=form.merchantAccount==="BLP"?(p(form.ccFeePct)||3.25)/100:0;
   const cc=pp*ccRate,spe=pp+rf+pf+cc;
@@ -1080,18 +1086,22 @@ function computeForBreakAndSize(brk,sz){
   const blpUp=form.programOwnership==="BLP Owned"?(p(form.blpOwnershipUpcharge)||15):0;
   const effectiveMf=baseMf+blpUp,md=(100-effectiveMf)/100;
   const freightAmt=getFreightPerPc(tn);
-  let ibf=0,obf=0;
-  if(form.shipperAccount==="Client"){ibf=0;obf=0;}
-  else if(isInStock()){
-    const manualPc=form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):0;
-    const autoFreight=freightAmt/qp;
-    const fval=form.includeInboundFreight==="Yes"?(manualPc>0?manualPc:autoFreight):0;
-    ibf=fval;obf=fval;
-  }else{
-    if(form.freightScenario==="Blank to Decorator")ibf=form.includeInboundFreight==="Yes"?(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0?(fq>0?p(form.inboundFreightTotal)/fq:0):freightAmt/qp):0;
-    obf=0;
+  // Single freight, divided by this tier's order quantity (minQty)
+  let frt=0;
+  if(form.shipperAccount==="Client"){
+    frt=0;
+  }else if(form.includeInboundFreight==="Yes"){
+    const applies=isInStock()||form.freightScenario==="Blank to Decorator";
+    if(applies){
+      if(form.inboundFreightMethod==="Manual Entry"&&p(form.inboundFreightTotal)>0){
+        frt=fq>0?p(form.inboundFreightTotal)/fq:0;
+      }else{
+        frt=fq>0?freightAmt/fq:freightAmt;
+      }
+    }
   }
-  const pp=md>0?(tn+ibf+obf)/md:0;
+  const ibf=frt,obf=0;
+  const pp=md>0?(tn+frt)/md:0;
   const rf=isInStock()?getRecFee(pp)/qp:0,pf=isInStock()?getPickFee(pp)/qp:0;
   const ccRate=form.merchantAccount==="BLP"?(p(form.ccFeePct)||3.25)/100:0;
   const cc=pp*ccRate,spe=pp+rf+pf+cc;
