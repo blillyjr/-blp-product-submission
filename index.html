@@ -495,7 +495,6 @@ function formToSPFields(){
     BundleFeePerPack:p(form.bundleFeePerPack)||null,
     QtyPerPack:p(form.qtyPerPack)||null,
     PMSSell:p(form.pmsSell)||null,
-    FinalSellSB:p(form.finalSellSB)||null,
     ProductURL:form.productURL,
     Co_x002d_opNum:form.coopNum,
     StandardLeadTime:form.standardLeadTime,
@@ -504,17 +503,19 @@ function formToSPFields(){
     Notes:form.notes,
     BLPWebsiteNum:form.blpWebsiteItemNum,
     WebsiteDescription:form.websiteDescription,
-    CurrentWebsitePrice:p(form.currentWebsitePrice)||null,
+    CurrentWebsitePrice:c.displaySell||null,
     FinalWebsitePrice:p(form.finalWebsitePrice)||null,
-    WebsiteSpreadPct:p(form.websiteSpreadPct)||null,
-    SBPriceEaches:p(form.sbPriceEaches)||null,
-    SBPricePacks:p(form.sbPricePacks)||null,
+    WebsiteSpreadPct:(form.hasSpread==="Yes"?p(form.spreadAmount):0)||null,
+    SBPriceEaches:c.sbEachNoMargin||null,
+    SBPricePacks:(c.sbEachNoMargin*c.packQty)||null,
     OMGSell:p(form.omgSell)||null,
     OMGCost:p(form.omgCost)||null,
     SubmissionStatus:form.submissionStatus||"Draft",
     SubmittedBy:userName,
     ModifiedByRole:role,
   };
+  // FinalSellSB mirrors SB Each (no margin) — check & balance value
+  f.FinalSellSB=c.sbEachNoMargin||null;
   // Apparel size data - store as JSON in Notes or a dedicated field
   if(isApparel()){
     f.SizeData=JSON.stringify({sizes:form.sizes,singlePrice:form.singlePriceAllSizes,sizePricingMode:form.sizePricingMode});
@@ -1340,6 +1341,10 @@ function mkSel(id,opts,ph){
 function mkIn(id,type,ph,ro){
   const v=form[id]||"";const cls=(modified[id]?"field-modified":"")+(ro?" readonly-field":"");
   return `<input type="${type||'text'}" id="${id}" value="${v}" placeholder="${ph||''}" onblur="setVal('${id}',this.value)" oninput="setVal('${id}',this.value,true)" class="${cls}" ${type==='number'?'step="any"':''} ${ro?'readonly':''}>`;
+}
+// Read-only calculated display field — always shows the live computed value, never a stale saved one
+function mkCalc(val){
+  return `<input type="text" value="${val}" class="readonly-field" readonly style="background:#f4f6f8;font-weight:600;color:#2c3e50">`;
 }
 function mkTog(id,opts){
   const v=form[id];
@@ -2526,15 +2531,16 @@ function renderForm(app){
       ${form.itemDescription?'<div class="inbound-box"><div class="inbound-label">Sales Draft:</div><div style="font-size:11px;margin-top:3px">'+form.itemDescription+'</div></div>':''}`
     ,"programs")+crd("Pricing",c.isBundle?'Per Pack ('+c.packQty+' pcs)':'',
       `<div class="row row-3">
-        ${fld("Website Price (calc)",mkIn("currentWebsitePrice","number",c.displaySell.toFixed(2)),{owner:"admin",help:'Calculated with '+form.spreadAmount+'% spread'})}
-        ${fld("Final Website Price",mkIn("finalWebsitePrice","number",c.displaySell.toFixed(2)),{owner:"admin",help:"Override if different from calculated"})}
-        ${fld("Website Spread %",mkIn("websiteSpreadPct","number",form.hasSpread==="Yes"?form.spreadAmount:"0"),{owner:"admin"})}
+        ${fld("Website Price (calc)",mkCalc(c.displaySell.toFixed(2)),{owner:"admin",help:'= Min Sell Price'+(form.hasSpread==="Yes"&&p(form.spreadAmount)>0?' (incl '+form.spreadAmount+'% spread)':'')})}
+        ${fld("Final Website Price",mkIn("finalWebsitePrice","number",""),{owner:"admin",help:"Blank — sales fills in actual sell"})}
+        ${fld("Website Spread %",mkCalc(form.hasSpread==="Yes"?form.spreadAmount+"%":"0%"),{owner:"admin"})}
       </div>
       <div class="row row-3">
-        ${fld("SB Eaches",mkIn("sbPriceEaches","number",c.sbEachNoMargin.toFixed(2)),{owner:"admin",help:"Cost + fees, no margin"})}
-        ${fld("SB Packs",mkIn("sbPricePacks","number",(c.sbEachNoMargin*c.packQty).toFixed(2)),{owner:"admin",help:c.isBundle?c.packQty+' per pack':''})}
-        ${fld("Final Sell SB",mkIn("finalSellSB","number",c.displaySellSB.toFixed(2)),{owner:"admin",help:'Sell w/ margin, no spread'})}
+        ${fld("SB Eaches",mkCalc(c.sbEachNoMargin.toFixed(2)),{owner:"admin",help:"Net + freight + rec + pick + CC (no margin)"})}
+        ${fld("SB Packs",mkCalc((c.sbEachNoMargin*c.packQty).toFixed(2)),{owner:"admin",help:c.isBundle?c.packQty+' per pack':'per pack'})}
+        ${fld("Final Sell SB",mkCalc(c.sbEachNoMargin.toFixed(2)),{owner:"admin",help:'= SB Each (no margin)'})}
       </div>
+      <div style="font-size:10px;color:#7f8c8d;margin:4px 0 8px;font-style:italic">SB pricing is a check & balance — confirms all extra fees are captured. Website Price (calc) mirrors the Min Sell Price from Review.</div>
       <div class="row row-2">
         ${fld("OMG Sell",mkIn("omgSell","number","0"),{owner:"admin"})}
         ${fld("OMG Cost",mkIn("omgCost","number","0"),{owner:"admin"})}
