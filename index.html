@@ -821,15 +821,10 @@ const STEPS_ADMIN=[
   {id:"decoration",label:"Deco",icon:"🎨"},{id:"costs",label:"Costs",icon:"💰"},
   {id:"freight",label:"Freight",icon:"🚢"},{id:"packaging",label:"Packaging",icon:"📋"},
   {id:"files",label:"Files",icon:"📁"},{id:"logistics",label:"Logistics",icon:"🚚"},
-  {id:"programfields",label:"Admin Fields",icon:"🏷"},{id:"review",label:"Review",icon:"✓"},
+  {id:"programfields",label:"Merch Ops Fields",icon:"🏷"},{id:"review",label:"Review",icon:"✓"},
 ];
 const STEPS_PROGRAMS=[
-  {id:"program",label:"Program",icon:"⚙"},{id:"product",label:"Product",icon:"📦"},
-  {id:"decoration",label:"Deco",icon:"🎨"},{id:"costs",label:"Costs",icon:"💰"},
-  {id:"freight",label:"Freight",icon:"🚢"},{id:"packaging",label:"Packaging",icon:"📋"},
-  {id:"files",label:"Files",icon:"📁"},{id:"logistics",label:"Logistics",icon:"🚚"},
-  {id:"programfields",label:"Pgm Fields",icon:"🏷"},{id:"validation",label:"Validate",icon:"✅"},
-  {id:"review",label:"Review",icon:"✓"},
+  {id:"platformspecialist",label:"Website Setup",icon:"🌐"},
 ];
 function getSteps(){return role==="programs"?STEPS_PROGRAMS:role==="admin"?STEPS_ADMIN:STEPS_SALES;}
 function setRole(r){role=r;currentStep=0;render();}
@@ -867,15 +862,7 @@ const ADMIN_REQUIRED=[
 ];
 const PROGRAMS_REQUIRED=[
   {key:"itemWeight",label:"Item Weight"},
-  {key:"itemSizeDimensional",label:"Item Dimensions",condition:()=>!isApparel()},
-  {key:"freightDone",label:"Freight Reviewed",check:()=>{
-    if(!isInStock())return true;
-    const c=compute();
-    return form.includeInboundFreight==="No"||c.inboundFreight>0;
-  }},
-  {key:"websiteDescription",label:"Website Description",check:()=>!!(form.websiteDescription||form.itemDescription)},
-  {key:"standardLeadTime",label:"Lead Time"},
-  {key:"lowParLevel",label:"Low Par Level",check:()=>p(form.lowParLevel)>0},
+  {key:"sizeQty",label:"Size First-Order Qty",condition:()=>isApparel(),check:()=>getTotalSizeQty()>0},
 ];
 
 function scoreFields(fieldList){
@@ -1355,12 +1342,12 @@ function fld(label,content,opts={}){
   const req=opts.required?'<span class="req">*</span>':'';
   const help=opts.help?`<div class="field-help">${opts.help}</div>`:'';
   const mod=modified[opts.key]?'<span class="modified-tag">Modified</span>':'';
-  const owner=opts.owner?`<span class="section-owner owner-${opts.owner}">${opts.owner==='sales'?'Sales':opts.owner==='admin'?'Admin':'Programs'}</span>`:'';
+  const owner=opts.owner?`<span class="section-owner owner-${opts.owner}">${opts.owner==='sales'?'Sales':opts.owner==='admin'?'Merch Ops':'Platform Spec'}</span>`:'';
   const badge=opts.badge||'';
   return `<div class="field"><label class="field-label">${label}${req}${badge}${mod}${owner}</label>${content}${help}</div>`;
 }
 function crd(title,subtitle,content,ownerTag){
-  const t=title?`<div class="card-title">${title}${ownerTag?'<span class="section-owner owner-'+ownerTag+'">'+(ownerTag==='sales'?'Sales Rep':ownerTag==='admin'?'E-Com Admin':'Programs')+'</span>':''}</div>`:'';
+  const t=title?`<div class="card-title">${title}${ownerTag?'<span class="section-owner owner-'+ownerTag+'">'+(ownerTag==='sales'?'Sales Rep':ownerTag==='admin'?'Merch Ops':'Platform Specialist')+'</span>':''}</div>`:'';
   const s=subtitle?`<div class="card-sub">${subtitle}</div>`:'';
   return `<div class="card">${t}${s}${content}</div>`;
 }
@@ -2005,7 +1992,7 @@ function renderDashboard(app){
       <div class="header-right">
         <div class="role-selector">
           <span class="role-label">View:</span>
-          ${['sales','admin','programs'].map(r=>`<button class="role-btn ${role===r?'active':'inactive'}" onclick="setRole('${r}')">${r==='sales'?'Sales':r==='admin'?'Admin':'Programs'}</button>`).join('')}
+          ${['sales','admin','programs'].map(r=>`<button class="role-btn ${role===r?'active':'inactive'}" onclick="setRole('${r}')">${r==='sales'?'Sales':r==='admin'?'Merch Ops':'Platform Specialist'}</button>`).join('')}
         </div>
       </div>
     </div>
@@ -2145,7 +2132,7 @@ function renderProjectDetail(app){
       <div class="header-right">
         <div class="role-selector">
           <span class="role-label">View:</span>
-          ${['sales','admin','programs'].map(r=>`<button class="role-btn ${role===r?'active':'inactive'}" onclick="setRole('${r}')">${r==='sales'?'Sales':r==='admin'?'Admin':'Programs'}</button>`).join('')}
+          ${['sales','admin','programs'].map(r=>`<button class="role-btn ${role===r?'active':'inactive'}" onclick="setRole('${r}')">${r==='sales'?'Sales':r==='admin'?'Merch Ops':'Platform Specialist'}</button>`).join('')}
         </div>
         <button class="btn-hdr" onclick="backToDashboard()">← Projects</button>
       </div>
@@ -2184,8 +2171,8 @@ function renderProjectDetail(app){
               <div class="product-row-meta">${prod.Supplier||''} ${prod.ProductCategory?'— '+prod.ProductCategory:''} ${prod.VendorItemNum?'('+prod.VendorItemNum+')':''}</div>
               <div style="display:flex;gap:8px;margin-top:4px">
                 ${compBar(comp.sales,'Sales')}
-                ${role!=='sales'?compBar(comp.admin,'Admin'):''}
-                ${role==='programs'?compBar(comp.programs,'Pgm'):''}
+                ${role!=='sales'?compBar(comp.admin,'Merch Ops'):''}
+                ${role==='programs'?compBar(comp.programs,'Platform Spec'):''}
               </div>
               </div>
             </div>
@@ -2212,7 +2199,7 @@ function renderForm(app){
       <div class="header-right">
         <div class="role-selector">
           <span class="role-label">View:</span>
-          ${['sales','admin','programs'].map(r=>`<button class="role-btn ${role===r?'active':'inactive'}" onclick="setRole('${r}')">${r==='sales'?'Sales':r==='admin'?'Admin':'Programs'}</button>`).join('')}
+          ${['sales','admin','programs'].map(r=>`<button class="role-btn ${role===r?'active':'inactive'}" onclick="setRole('${r}')">${r==='sales'?'Sales':r==='admin'?'Merch Ops':'Platform Specialist'}</button>`).join('')}
         </div>
         <button class="btn-hdr" onclick="backToProject()">← Products</button>
       </div>
@@ -2228,7 +2215,95 @@ function renderForm(app){
     <div class="main">`;
 
   // FORM STEPS — same as v5
-  if(stepId==="program"){
+  if(stepId==="platformspecialist"){
+    // Single consolidated page for Platform Specialist (website setup)
+    const c=compute();
+    html+=`<div style="background:#eaf2f8;border-left:4px solid #2980b9;padding:10px 14px;border-radius:6px;margin-bottom:16px;font-size:12px;color:#2c3e50">
+      <strong>Platform Specialist — Website Setup</strong><br>Everything needed to set up this product on the website, on one page. Item setup details are completed by Merchandise Operations beforehand.</div>`;
+    // PRODUCT IDENTITY
+    html+=crd("Product Identity","",
+      `<div class="row row-2">
+        ${fld("Supplier",mkCalc(form.supplier||"—"))}
+        ${fld("Product Category",mkCalc((form.websiteCategory==="Other"?form.customCategory:form.websiteCategory)||"—"))}
+      </div>
+      <div class="row row-2">
+        ${fld("Vendor Item #",mkCalc(form.vendorItemNum||"—"))}
+        ${fld("Item Name",mkCalc(form.itemName||"—"))}
+      </div>
+      <div class="row row-2">
+        ${fld("Item Color(s)",mkCalc(form.itemColor||"—"))}
+        ${isApparel()?fld("Apparel Size Range",mkCalc(form.itemSizeApparel||"—")):'<div></div>'}
+      </div>
+      ${fld("Item Description",mkCalc(form.itemDescription||form.websiteDescription||"—"))}
+      <div class="row row-3">
+        ${fld("Supplier Minimum",mkCalc(form.supplierMinimum||"—"))}
+        ${fld("Website Minimum",mkCalc(form.websiteMinimum||"—"))}
+        ${fld("Item Weight",mkIn("itemWeight","text",""),{owner:"programs",help:"Platform Specialist completes"})}
+      </div>
+      ${form.soldAs==="Pack"||p(form.bundleQty)>0?fld("Quantity per Bundle",mkCalc(form.bundleQty||form.qtyPerPack||"—")):''}`
+    ,"programs");
+    // APPAREL SIZE GRID (reduced: Size, First Order Qty, Par, Sell Each)
+    if(isApparel()&&getEnabledSizes().length>0){
+      html+=crd("Apparel Size Grid","Sizes, first order quantity, par level, and sell price per size.",
+        `<table class="size-grid">
+          <tr><th>Size</th><th>1st Order Qty</th><th>Par Level</th><th>Sell Each</th></tr>
+          ${getEnabledSizes().map(sz=>{
+            const s=form.sizes[sz];
+            const autoSell=p(form.itemCostNet)>0?computeForSize(sz).sellEach:0;
+            const displaySell=form.sizePricingMode==="Direct Sell Price"&&isUpsize(sz)&&p(s.sellPrice)>0?p(s.sellPrice):autoSell;
+            return `<tr><td class="size-label">${sizeLabel(sz)}</td>
+              <td><input type="number" value="${s.qty||''}" placeholder="0" onblur="setSizeField('${sz}','qty',this.value)" oninput="setSizeField('${sz}','qty',this.value,true)" min="0"></td>
+              <td><input type="number" value="${s.par||''}" placeholder="0" onblur="setSizeField('${sz}','par',this.value)" oninput="setSizeField('${sz}','par',this.value,true)" min="0"></td>
+              <td class="sell-val">${displaySell>0?'$'+displaySell.toFixed(2):'—'}</td></tr>`;
+          }).join('')}
+        </table>`
+      ,"programs");
+    }
+    // QUANTITY PRICE BREAKS — per size, per-unit sell price
+    if(form.hasPriceBreaks==="Yes"&&form.priceBreaks.length>0){
+      const apparelBreaks=isApparel()&&getEnabledSizes().length>0&&form.singlePriceAllSizes!=="Yes"&&getEnabledSizes().some(sz=>isUpsize(sz));
+      html+=crd("Quantity Price Breaks",apparelBreaks?"Final sell price per individual unit, by size and quantity break.":"Final sell price per individual unit, by quantity break.",
+        (apparelBreaks?
+        `<div style="overflow-x:auto"><table class="size-grid">
+          <tr><th>Size</th>${form.priceBreaks.map(brk=>'<th>'+(brk.minQty||'1')+'–'+(brk.maxQty||'∞')+'</th>').join('')}</tr>
+          ${getEnabledSizes().map(sz=>{
+            return '<tr><td class="size-label">'+sizeLabel(sz)+'</td>'+form.priceBreaks.map(brk=>{
+              const bs=computeForBreakAndSize(brk,sz);
+              return '<td class="sell-val">$'+bs.sellEach.toFixed(2)+'</td>';
+            }).join('')+'</tr>';
+          }).join('')}
+        </table></div>
+        <div style="font-size:10px;color:#7f8c8d;margin-top:6px;font-style:italic">Per-unit sell price (not extended order total).</div>`
+        :`<table class="size-grid">
+          <tr><th>Quantity Break</th><th>Final Sell (per unit)</th></tr>
+          ${form.priceBreaks.map(brk=>{
+            const bc=computeForBreak(brk);
+            return '<tr><td>'+(brk.minQty||'1')+'–'+(brk.maxQty||'∞')+'</td><td class="sell-val">$'+bc.sellEach.toFixed(2)+'</td></tr>';
+          }).join('')}
+        </table>
+        <div style="font-size:10px;color:#7f8c8d;margin-top:6px;font-style:italic">Per-unit sell price (not extended order total).</div>`)
+      ,"programs");
+    }
+    // PACKAGING & BUNDLING
+    html+=crd("Packaging & Bundling","",
+      `<div class="row row-2">
+        ${fld("Sold As",mkCalc(form.soldAs||"Each"))}
+        ${form.soldAs==="Pack"?fld("Quantity per Pack",mkCalc(form.qtyPerPack||"—")):'<div></div>'}
+      </div>`
+    ,"programs");
+    // FILES
+    html+=crd("Product Files","",
+      (form.uploadedFiles&&form.uploadedFiles.length>0?
+        '<div class="file-list">'+form.uploadedFiles.map(f=>'<div class="file-item"><span>📄 '+(f.name||f)+'</span>'+(f.url?' <a href="'+f.url+'" target="_blank" style="font-size:11px">View</a>':'')+'</div>').join('')+'</div>'
+        :'<div style="font-size:12px;color:#7f8c8d">No files uploaded.</div>')
+    ,"programs");
+    // BLP WEBSITE ITEM #
+    html+=crd("Website Item Number","From Merchandise Operations.",
+      fld("BLP Website Item #",mkCalc(form.blpWebsiteItemNum||"—"))
+    ,"programs");
+  }
+
+  else if(stepId==="program"){
     html+=crd("Program Configuration","These settings come from the project. Changes here only affect this session.",
       `<div class="row row-2">
         ${fld("Program Ownership",mkTog("programOwnership",["Client Owned","BLP Owned"]))}
@@ -2521,7 +2596,7 @@ function renderForm(app){
 
   else if(stepId==="programfields"){
     const c=compute();
-    html+=crd("Admin-Assigned Fields","",
+    html+=crd("Merchandise Operations Fields","",
       `<div class="row row-2">
         ${fld("BLP Website Item #",mkIn("blpWebsiteItemNum","text",""),{owner:"admin"})}
         ${fld("Co-op #",mkIn("coopNum","text",""),{owner:"admin"})}
@@ -2633,13 +2708,13 @@ function renderForm(app){
     <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
       <span style="font-size:11px;font-weight:700;color:#1a5276">Completion:</span>
       ${compBar(ss.pct,'Sales')}
-      ${role!=='sales'?compBar(as.pct,'Admin'):''}
-      ${role==='programs'?compBar(ps.pct,'Pgm'):''}
+      ${role!=='sales'?compBar(as.pct,'Merch Ops'):''}
+      ${role==='programs'?compBar(ps.pct,'Platform Spec'):''}
     </div>
   </div>`;
 
-  // On review step, show submission gate
-  if(isLastStep){
+  // On review step, show submission gate (sales only)
+  if(isLastStep&&role==='sales'){
     if(canSubmit){
       html+=`<div class="submit-gate submit-gate-ready">
         <div style="font-size:13px;font-weight:700;color:#27ae60;margin-bottom:6px">✅ Ready to Submit</div>
