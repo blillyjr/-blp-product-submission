@@ -505,6 +505,7 @@ function formToSPFields(){
     WebsiteDescription:form.websiteDescription,
     CurrentWebsitePrice:c.displaySell||null,
     FinalWebsitePrice:p(form.finalWebsitePrice)||null,
+    ClientQuotedSell:p(form.clientQuotedSell)||null,
     WebsiteSpreadPct:(form.hasSpread==="Yes"?p(form.spreadAmount):0)||null,
     SBPriceEaches:c.sbEachNoMargin||null,
     SBPricePacks:(c.sbEachNoMargin*c.packQty)||null,
@@ -595,6 +596,7 @@ function spFieldsToForm(sp){
   form.websiteDescription=sp.WebsiteDescription||"";
   form.currentWebsitePrice=sp.CurrentWebsitePrice!=null?String(sp.CurrentWebsitePrice):"";
   form.finalWebsitePrice=sp.FinalWebsitePrice!=null?String(sp.FinalWebsitePrice):"";
+  form.clientQuotedSell=sp.ClientQuotedSell!=null?String(sp.ClientQuotedSell):"";
   form.websiteSpreadPct=sp.WebsiteSpreadPct!=null?String(sp.WebsiteSpreadPct):"";
   form.sbPriceEaches=sp.SBPriceEaches!=null?String(sp.SBPriceEaches):"";
   form.sbPricePacks=sp.SBPricePacks!=null?String(sp.SBPricePacks):"";
@@ -679,7 +681,7 @@ function getDefaults(){
     productURL:"",coopNum:"",standardLeadTime:"",is24HrAvailable:"No",
     lowParLevel:"",notes:"",
     finalSellSB:"",pmsSell:"",
-    blpWebsiteItemNum:"",websiteDescription:"",currentWebsitePrice:"",finalWebsitePrice:"",websiteSpreadPct:"",
+    blpWebsiteItemNum:"",websiteDescription:"",currentWebsitePrice:"",finalWebsitePrice:"",websiteSpreadPct:"",clientQuotedSell:"",
     sbPriceEaches:"",sbPricePacks:"",omgSell:"",omgCost:"",
     submissionStatus:"Draft",
     // Apparel size grid
@@ -724,6 +726,13 @@ function setVal(key,val,silent){
   form[key]=val;
   if(key==="isApparelItem"&&isApparel()&&p(form.foldingPolybag)===0)form.foldingPolybag="0.50";
   if(key==="ccFeePct"&&p(val)<2.9&&p(val)>0){form.ccFeePct="2.9";showToast("CC fee floor is 2.9%","error");}
+  // Client Quoted Sell auto-fills Final Website Price (Merch Ops can still override).
+  // Only sync while Final Website Price is blank or still holds our previous auto-fill.
+  if(key==="clientQuotedSell"){
+    if(!p(form.finalWebsitePrice)||form.finalWebsitePrice===form._quotedAutoFill){
+      form.finalWebsitePrice=val;form._quotedAutoFill=val;
+    }
+  }
   if(!silent){
     // Defer render to avoid losing focus during typing
     const active=document.activeElement;
@@ -975,6 +984,21 @@ function computeForSize(sz){
   return{netCost:tn,programPrice:pp,sellEach:fs};
 }
 function getTotalSizeQty(){return getEnabledSizes().reduce((sum,sz)=>sum+p(form.sizes[sz].qty),0);}
+// Client Quoted Sell margin check: true if any quoted price (base or per-size) is below calculated min sell
+function quotedBelowMin(){
+  const q=p(form.clientQuotedSell);
+  if(q>0&&q<compute().finalSell-0.005)return true;
+  if(isApparel()&&form.singlePriceAllSizes==="No"){
+    return getEnabledSizes().some(sz=>{
+      const sq=p(form.sizes[sz].quotedSell);
+      return sq>0&&sq<computeForSize(sz).sellEach-0.005;
+    });
+  }
+  return false;
+}
+function quotedWarningHtml(){
+  return quotedBelowMin()?'<div class="margin-warning"><span class="margin-warning-icon">⚠️</span><span class="margin-warning-text">Client Quoted Sell is below the predetermined margin — requires approval. You may still continue with the submission.</span></div>':'';
+}
 
 // Price break functions
 function addPriceBreak(){
@@ -2242,19 +2266,16 @@ function renderForm(app){
       </div>
       ${form.soldAs==="Pack"||p(form.bundleQty)>0?fld("Quantity per Bundle",mkCalc(form.bundleQty||form.qtyPerPack||"—")):''}`
     ,"programs");
-    // APPAREL SIZE GRID (reduced: Size, First Order Qty, Par, Sell Each)
+    // APPAREL SIZE GRID (reduced: Size, First Order Qty, Par) — Sell Each removed per John (SmartBooks Sell belongs to Merch Ops only)
     if(isApparel()&&getEnabledSizes().length>0){
-      html+=crd("Apparel Size Grid","Sizes, first order quantity, par level, and sell price per size.",
+      html+=crd("Apparel Size Grid","Sizes, first order quantity, and par level per size.",
         `<table class="size-grid">
-          <tr><th>Size</th><th>1st Order Qty</th><th>Par Level</th><th>Sell Each</th></tr>
+          <tr><th>Size</th><th>1st Order Qty</th><th>Par Level</th></tr>
           ${getEnabledSizes().map(sz=>{
             const s=form.sizes[sz];
-            const autoSell=p(form.itemCostNet)>0?computeForSize(sz).sellEach:0;
-            const displaySell=form.sizePricingMode==="Direct Sell Price"&&isUpsize(sz)&&p(s.sellPrice)>0?p(s.sellPrice):autoSell;
             return `<tr><td class="size-label">${sizeLabel(sz)}</td>
               <td><input type="number" value="${s.qty||''}" placeholder="0" onblur="setSizeField('${sz}','qty',this.value)" oninput="setSizeField('${sz}','qty',this.value,true)" min="0"></td>
-              <td><input type="number" value="${s.par||''}" placeholder="0" onblur="setSizeField('${sz}','par',this.value)" oninput="setSizeField('${sz}','par',this.value,true)" min="0"></td>
-              <td class="sell-val">${displaySell>0?'$'+displaySell.toFixed(2):'—'}</td></tr>`;
+              <td><input type="number" value="${s.par||''}" placeholder="0" onblur="setSizeField('${sz}','par',this.value)" oninput="setSizeField('${sz}','par',this.value,true)" min="0"></td></tr>`;
           }).join('')}
         </table>`
       ,"programs");
@@ -2390,7 +2411,7 @@ function renderForm(app){
       </div>
       ${form.singlePriceAllSizes==="No"?'<div class="single-price-toggle" style="background:#d6eaf8">'+fld("Upsize Pricing Mode",mkTog("sizePricingMode",["Upcharge","Direct Sell Price"]))+'</div>':''}
       <table class="size-grid">
-        <tr><th></th><th>Size</th><th>Base Cost</th>${form.singlePriceAllSizes==="No"?(form.sizePricingMode==="Upcharge"?'<th>Upcharge</th><th>Net Cost</th>':'<th>Net Cost</th><th>Sell Price</th>'):'<th>Net Cost</th>'}<th>1st Order Qty</th><th>Par Level</th><th>Sell Each</th></tr>
+        <tr><th></th><th>Size</th><th>Base Cost</th>${form.singlePriceAllSizes==="No"?(form.sizePricingMode==="Upcharge"?'<th>Upcharge</th><th>Net Cost</th>':'<th>Net Cost</th><th>Sell Price</th>'):'<th>Net Cost</th>'}<th>1st Order Qty</th><th>Par Level</th><th>Sell Each</th>${form.singlePriceAllSizes==="No"?'<th>Quoted Sell</th>':''}</tr>
         ${ALL_SIZES.map(sz=>{
           const s=form.sizes[sz],enabled=s.enabled,isUp=isUpsize(sz);
           const cost=getSizeCost(sz);
@@ -2407,6 +2428,7 @@ function renderForm(app){
             <td>${enabled?'<input type="number" value="'+(s.qty||'')+'" placeholder="0" onblur="setSizeField(\''+sz+'\',\'qty\',this.value)" oninput="setSizeField(\''+sz+'\',\'qty\',this.value,true)" min="0">':'-'}</td>
             <td>${enabled?'<input type="number" value="'+(s.par||'')+'" placeholder="0" onblur="setSizeField(\''+sz+'\',\'par\',this.value)" oninput="setSizeField(\''+sz+'\',\'par\',this.value,true)" min="0">':'-'}</td>
             <td class="sell-val">${enabled&&displaySell>0?'$'+displaySell.toFixed(2):'-'}</td>
+            ${form.singlePriceAllSizes==="No"?'<td>'+(enabled?'<input type="number" value="'+(s.quotedSell||'')+'" placeholder="—" onblur="setSizeField(\''+sz+'\',\'quotedSell\',this.value)" oninput="setSizeField(\''+sz+'\',\'quotedSell\',this.value,true)" step="any"'+(p(s.quotedSell)>0&&p(s.quotedSell)<autoSell-0.005?' style="border-color:#e74c3c;color:#c0392b"':'')+'>':'-')+'</td>':''}
           </tr>`;
         }).join('')}
       </table>
@@ -2414,7 +2436,8 @@ function renderForm(app){
         <div class="size-totals-item">Total Units: <strong>${getTotalSizeQty()}</strong></div>
         <div class="size-totals-item">Blended Cost: <strong>$${getBlendedCost().toFixed(2)}</strong></div>
         <div class="size-totals-item">Sizes: <strong>${getEnabledSizes().map(sizeLabel).join(', ')}</strong></div>
-      </div>`):'');
+      </div>
+      ${quotedWarningHtml()}`):'');
   }
 
   else if(stepId==="decoration"){
@@ -2470,12 +2493,18 @@ function renderForm(app){
         '<div class="row row-2"><div class="field"><label class="field-label">Deco '+(i+1)+' Setup Sell'+(dec.method?' — '+dec.method:'')+'</label><input type="number" value="'+(dec.setupSell||'')+'" onchange="setDeco('+i+',\'setupSell\',this.value)" placeholder="'+(p(dec.setupCost||form.initialSetupCharge)/0.8).toFixed(2)+'"><div class="field-help">Auto: $'+(p(dec.setupCost||form.initialSetupCharge)/0.8).toFixed(2)+'</div></div><div></div></div>'
       ).join('')}
       ${fld("PMS Match (sell)",mkIn("pmsSell","number",""),{help:p(form.pmsCharge)>0?"Auto: $"+(p(form.pmsCharge)/0.8).toFixed(2):""})}`
-    )+(role!=="sales"?crd("Pricing Preview",`Margin: ${compute().effectiveMargin}%`,
+    )+crd("Pricing Preview",`Margin: ${compute().effectiveMargin}%`,
       `<div class="pricing-box"><div class="row ${form.hasSpread==='Yes'?'row-4':'row-3'}">
         <div><div class="pricing-label">Net</div><div class="pricing-value">$${c.totalNet.toFixed(2)}</div></div>
         <div><div class="pricing-label">Program</div><div class="pricing-value blue">$${c.programPrice.toFixed(2)}</div></div>
         ${form.hasSpread==='Yes'?'<div><div class="pricing-label">Sell (SB)</div><div class="pricing-value" style="color:#8e44ad">$'+c.sellBeforeSpread.toFixed(2)+'</div></div><div><div class="pricing-label">Sell (Website)</div><div class="pricing-value green">$'+c.finalSell.toFixed(2)+'</div></div>':'<div><div class="pricing-label">Sell</div><div class="pricing-value green">$'+c.finalSell.toFixed(2)+'</div></div>'}
-      </div></div>`):'')
+      </div></div>
+      <div class="row row-2" style="margin-top:10px">
+        ${fld("Client Quoted Sell (each)",mkIn("clientQuotedSell","number",""),{owner:"sales",help:"Only if the client was quoted a price different from the calculated sell. Carries to Merch Ops as Final Website Price."})}
+        <div></div>
+      </div>
+      ${quotedWarningHtml()}`
+    ,"sales")
     +crd("Quantity Price Breaks","Optional: Set tiered pricing for different order quantities.",
       `${fld("Has Price Breaks?",mkTog("hasPriceBreaks",["Yes","No"]))}
       ${form.hasPriceBreaks==="Yes"?renderPriceBreaksGrid():'<div style="font-size:11px;color:#7f8c8d;margin-top:4px;font-style:italic">Enable to set different prices at different order quantities.</div>'}`
@@ -2607,9 +2636,11 @@ function renderForm(app){
     ,"programs")+crd("Pricing",c.isBundle?'Per Pack ('+c.packQty+' pcs)':'',
       `<div class="row row-3">
         ${fld("Website Price (calc)",mkCalc(c.displaySell.toFixed(2)),{owner:"admin",help:'= Min Sell Price'+(form.hasSpread==="Yes"&&p(form.spreadAmount)>0?' (incl '+form.spreadAmount+'% spread)':'')})}
-        ${fld("Final Website Price",mkIn("finalWebsitePrice","number",""),{owner:"admin",help:"Blank — sales fills in actual sell"})}
+        ${fld("Final Website Price",mkIn("finalWebsitePrice","number",""),{owner:"admin",help:p(form.clientQuotedSell)>0?"Auto-filled from Client Quoted Sell — you can change it":"Blank — sales fills in actual sell"})}
         ${fld("Website Spread %",mkCalc(form.hasSpread==="Yes"?form.spreadAmount+"%":"0%"),{owner:"admin"})}
       </div>
+      ${p(form.clientQuotedSell)>0?'<div class="inbound-box"><div class="inbound-label">Client Quoted Sell (from Sales): $'+p(form.clientQuotedSell).toFixed(2)+'</div></div>':''}
+      ${quotedWarningHtml()}
       <div class="row row-3">
         ${fld("SB Eaches",mkCalc(c.sbEachNoMargin.toFixed(2)),{owner:"admin",help:"Net + freight + rec + pick + CC (no margin)"})}
         ${fld("SB Packs",mkCalc((c.sbEachNoMargin*c.packQty).toFixed(2)),{owner:"admin",help:c.isBundle?c.packQty+' per pack':'per pack'})}
