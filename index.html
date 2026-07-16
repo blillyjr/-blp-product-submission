@@ -1597,6 +1597,156 @@ async function exportProjectToExcel(){
 }
 
 // ============================================================
+// SMARTBOOKS EXPORT — exact Master Price Sheet layout (69 cols, A–BQ)
+// Writes computed VALUES from the app engine (per John/Jenn: app is source of truth;
+// sheet formulas hardcode 40% margin + global spread which would be wrong for some programs).
+// Apparel: one row for base sizes + one additional row per enabled upsize (per Jenn).
+// ============================================================
+async function exportSmartBooks(){
+  if(products.length===0){showToast("No products to export.","error");return;}
+  try{
+    if(typeof XLSX==='undefined'){
+      await loadScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+    }
+    const proj=currentProject;
+    const r2=x=>Math.round(x*100)/100, r4=x=>Math.round(x*10000)/10000;
+    // Row 1: group bands at exact template positions (0-indexed: A,L,R,Y,AE,AR,AV,BA,BI,BL)
+    const band=new Array(69).fill(null);
+    band[0]="  ITEM DETAILS";band[11]="  ORDERING & SPECS";band[17]="  DECORATION — 1ST";
+    band[24]="  DECORATION — 2ND";band[30]="  COST COMPONENTS";band[43]="  CALCULATED COSTS";
+    band[47]="  PROGRAM PRICING";band[52]="  SMARTBOOKS & WEBSITE";band[60]="  ADDITIONAL CHARGES";
+    band[63]="  OPERATIONS";
+    // Row 2: exact sub-headers from the Master Price Sheet
+    const sub=["Supplier\n(use original price for apparel)","Website Category","Children's Product?","PROP 65 / Safety Label?","BLP Overseas?","In Stock / On Demand","BLP Item #","Vendor Item #","Item Color","Item Size - Apparel","Item Name","Item Description to go on website (PROGRAMS ASSIGNS)","Supplier Minimum","Website Minimum","1st Quantity to Order","Item Weight","Item Size (dimensional)","Decoration Supplier","1st Decoration Method","1st Decoration Location","Imprint Area Dimensions","Logo Version","# Decoration Colors","1st PMS Colors","2nd Decoration Method","2nd Decoration Location","2nd Imprint Dimensions","2nd Logo Version","2nd # Decoration Colors","2nd PMS Colors","Item Cost (net)","Run Charge (net)","Run Charge per Add. Loc.","Initial Setup (net)","Repeat Setup\n(amort. net)","Setup Amort.\n+ Bundle/pc","Polybag (Apparel)","Size Sticker","PMS Charge (net)","Pack or Each?","Bundling: MFG or BLP?","Bundle Fee / pack","Qty / pack","Bundle Fee / piece","Total Net Cost","Inbound Freight","Outbound Freight","Program Price","Inbound Rec. Fee","Outbound Pick Fee","CC Fee","Min Sell Price (each)","Min Sell Price (pack)","SB Price (each)","SB Price (pack)","OMG Sell (cust. stock)","OMG Cost (cust. stock)","Final Sell for SB","Website Price","Final Website Price","Website Spread","Setup Sell","PMS Match Sell","Low Par Level","Std Lead Time","24hr Production?","Product URL","Co-op #","Notes"];
+    const rows=[band,sub];
+    // Build one output row from current form state (already hydrated + computed)
+    function sbRow(opts){
+      const c=compute();
+      const d1=form.decorations[0]||{},d2=form.decorations[1]||null;
+      const rc=form.decorations.reduce((s,d)=>s+p(d.runCharge),0)||p(form.runCharge);
+      const spreadFrac=form.hasSpread==="Yes"?p(form.spreadAmount)/100:0;
+      const websitePrice=opts.directSell>0?opts.directSell:c.finalSell;
+      return [
+        form.supplier||"",
+        form.websiteCategory==="Other"?(form.customCategory||"Other"):(form.websiteCategory||""),
+        form.isChildrens||"No",form.needsProp65||"No",form.isOverseasDirect||"No",
+        form.stockStatus||"In Stock",
+        form.blpWebsiteItemNum||"PROGRAMS",
+        form.vendorItemNum||"",form.itemColor||"",
+        opts.sizeLabel,
+        form.itemName||"",
+        form.websiteDescription||"PROGRAMS",
+        p(form.supplierMinimum)||form.supplierMinimum||"",
+        p(form.websiteMinimum)||form.websiteMinimum||"",
+        opts.qty,
+        form.itemWeight||"PROGRAMS",
+        form.itemSizeDimensional||"n/a",
+        form.decorationSupplier||"",
+        d1.method||"n/a",d1.location||"n/a",d1.dimensions||"n/a",d1.logo||"n/a",d1.colors||"n/a",d1.pms||"n/a",
+        d2?(d2.method||"n/a"):"n/a",d2?(d2.location||"n/a"):"n/a",d2?(d2.dimensions||"n/a"):"n/a",
+        d2?(d2.logo||"n/a"):"n/a",d2?(d2.colors||"n/a"):"n/a",d2?(d2.pms||"n/a"):"n/a",
+        r4(p(form.itemCostNet)),r2(rc),r2(p(form.runChargeAddlLocation)),
+        r2(p(form.initialSetupCharge)),r2(p(form.repeatSetup)),
+        r4(c.repeatPerPc+c.bundlePerPc),
+        r2(p(form.foldingPolybag)),r2(p(form.shirtSizeSticker)),r2(p(form.pmsCharge)),
+        form.soldAs==="Pack"?"pack":"ea",
+        form.soldAs==="Pack"?(form.bundleSource||"0"):"0",
+        r2(p(form.bundleFeePerPack)),p(form.qtyPerPack)||1,r4(c.bundlePerPc),
+        r4(c.totalNet),r4(c.inboundFreight),r4(c.outboundFreight),
+        r4(c.programPrice),r4(c.receivingFee),r4(c.pickFee),r4(c.ccFee),
+        r4(c.sellBeforeSpread),r4(c.displaySellSB),
+        r4(c.sbEachNoMargin),r4(c.sbEachNoMargin*c.packQty),
+        r2(p(form.omgSell)),r2(p(form.omgCost)),
+        r4(c.sellBeforeSpread),
+        r4(websitePrice),
+        opts.finalWebsite>0?r2(opts.finalWebsite):"",
+        spreadFrac,
+        r2(p(d1.setupSell)||c.setupSellAuto),
+        r2(p(form.pmsSell)||c.pmsSellAuto),
+        opts.par!==undefined&&opts.par!==""?p(opts.par):(form.lowParLevel||"PROGRAMS"),
+        form.standardLeadTime||"PROGRAMS",
+        form.is24HrAvailable||"PROGRAMS",
+        form.productURL||"",
+        form.coopNum||"PROGRAMS",
+        form.notes||""
+      ];
+    }
+    let rowCount=0;
+    products.forEach(prod=>{
+      const prevForm=JSON.parse(JSON.stringify(form));
+      const prevProduct=currentProduct;
+      currentProduct=prod;
+      spFieldsToForm(prod);
+      if(proj){
+        form.programOwnership=proj.ProgramOwnership||"Client Owned";
+        form.marginFloor=proj.MarginFloor!=null?String(proj.MarginFloor):"40";
+        form.blpOwnershipUpcharge=proj.BLPUpchargePct!=null?String(proj.BLPUpchargePct):"15";
+        form.merchantAccount=proj.MerchantAccount||"Client";
+        form.ccFeePct=proj.CCFeePct!=null?String(proj.CCFeePct):"3.25";
+        form.shipperAccount=proj.ShipperAccount||"BLP";
+        form.rollSetupIntoPrice=proj.RollSetUpIntoPrice||"No";
+        form.roundTo=proj.RoundTo||"0.01";
+        form.hasSpread=proj.HasSpread||form.hasSpread;
+        form.spreadAmount=proj.SpreadAmount!=null?String(proj.SpreadAmount):form.spreadAmount;
+        form.shippingUpchargeType=proj.ShipUpchargeType||form.shippingUpchargeType;
+        form.shippingUpchargeAmount=proj.ShipUpchargeAmount!=null?String(proj.ShipUpchargeAmount):form.shippingUpchargeAmount;
+      }
+      const apparel=isApparel()&&getEnabledSizes().length>0;
+      if(!apparel){
+        rows.push(sbRow({sizeLabel:form.itemSizeApparel||"n/a",qty:p(form.firstQtyToOrder)||"",
+          finalWebsite:p(form.finalWebsitePrice),directSell:0}));
+        rowCount++;
+      }else{
+        const enabled=getEnabledSizes();
+        const baseSizes=enabled.filter(sz=>!isUpsize(sz));
+        const upsizes=form.singlePriceAllSizes==="Yes"?[]:enabled.filter(sz=>isUpsize(sz));
+        const totalQty=getTotalSizeQty()||p(form.firstQtyToOrder)||1;
+        const baseCost=p(form.itemCostNet);
+        // Snapshot size data BEFORE disabling apparel mode (getEnabledSizes etc. read form.sizes)
+        const sizeSnap={};enabled.forEach(sz=>{sizeSnap[sz]=Object.assign({},form.sizes[sz]);});
+        // Freeze amortization qty to the TOTAL order (mirrors computeForSize), then
+        // temporarily disable apparel mode so compute() prices at a specific per-row cost.
+        form.firstQtyToOrder=String(totalQty);
+        form.isApparelItem="No";
+        if(form.singlePriceAllSizes==="Yes"||baseSizes.length>0){
+          // Base row: all sizes when single-price, else base sizes only
+          const rowSizes=form.singlePriceAllSizes==="Yes"?enabled:baseSizes;
+          const label=rowSizes.length>1?sizeLabel(rowSizes[0])+"-"+sizeLabel(rowSizes[rowSizes.length-1]):sizeLabel(rowSizes[0]);
+          const rowQty=rowSizes.reduce((s,sz)=>s+p(sizeSnap[sz].qty),0)||totalQty;
+          form.itemCostNet=String(baseCost);
+          rows.push(sbRow({sizeLabel:label,qty:rowQty,
+            finalWebsite:p(form.finalWebsitePrice),directSell:0}));
+          rowCount++;
+        }
+        upsizes.forEach(sz=>{
+          const s=sizeSnap[sz];
+          // Per-size cost = base + upcharge (upcharge mode); direct-sell mode keeps base cost
+          // and overrides the website sell with the entered price (mirrors computeForSize).
+          const upCost=form.sizePricingMode==="Upcharge"?baseCost+p(s.upcharge):baseCost;
+          form.itemCostNet=String(r4(upCost));
+          const directSell=form.sizePricingMode==="Direct Sell Price"&&p(s.sellPrice)>0?p(s.sellPrice):0;
+          rows.push(sbRow({sizeLabel:sizeLabel(sz),qty:p(s.qty)||"",par:s.par,
+            finalWebsite:p(s.quotedSell)||p(form.finalWebsitePrice),directSell:directSell}));
+          rowCount++;
+        });
+      }
+      form=JSON.parse(JSON.stringify(prevForm));
+      currentProduct=prevProduct;
+    });
+    const ws=XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols']=sub.map((h,i)=>({wch:Math.min(Math.max(String(h).split("\n")[0].length,10)+2,32)}));
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,"Sheet1");
+    const fileName=((proj?.Title||"Project")+"_SmartBooks_Upload").replace(/[^a-zA-Z0-9_-]/g,"_")+".xlsx";
+    XLSX.writeFile(wb,fileName);
+    showToast("SmartBooks export: "+rowCount+" rows from "+products.length+" products.");
+  }catch(e){
+    console.error("SmartBooks export error:",e);
+    showToast("SmartBooks export failed: "+e.message,"error");
+  }
+}
+
+// ============================================================
 // BULK IMPORT
 // ============================================================
 let importState={tab:'paste',rawData:[],headers:[],mapping:{},parsed:[],importing:false,progress:0,results:null};
@@ -2182,6 +2332,7 @@ function renderProjectDetail(app){
         <div><div class="dash-title" style="font-size:16px">Products</div></div>
         <div style="display:flex;gap:8px">
           <button class="btn-save" style="background:#27ae60" onclick="exportProjectToExcel()">📊 Export Excel</button>
+          <button class="btn-save" style="background:#8e44ad" onclick="exportSmartBooks()">📋 SmartBooks Export</button>
           <button class="btn-save" style="background:#1a5276" onclick="openBulkImport()">📥 Bulk Import</button>
           <button class="btn-save" onclick="startNewProduct()">+ New Product</button>
         </div>
